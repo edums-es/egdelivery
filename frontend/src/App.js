@@ -1,55 +1,86 @@
-import { useEffect } from "react";
-import "@/App.css";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import axios from "axios";
-import { HOME } from "@/constants/testIds";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { Toaster } from "@/components/ui/sonner";
+import { AuthProvider, useAuth } from "@/context/AuthContext";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
+import Landing from "@/pages/Landing";
+import LoginPage from "@/pages/LoginPage";
+import MenuPage from "@/pages/public/MenuPage";
 
-const Home = () => {
-  const helloWorldApi = async () => {
-    try {
-      const response = await axios.get(`${API}/`);
-      console.log(response.data.message);
-    } catch (e) {
-      console.error(e, `errored out requesting / api`);
-    }
-  };
+import AdminLayout from "@/components/admin/AdminLayout";
+import Dashboard from "@/pages/admin/Dashboard";
+import Orders from "@/pages/admin/Orders";
+import Products from "@/pages/admin/Products";
+import Categories from "@/pages/admin/Categories";
+import Coupons from "@/pages/admin/Coupons";
+import Banners from "@/pages/admin/Banners";
+import Settings from "@/pages/admin/Settings";
+import Reports from "@/pages/admin/Reports";
 
-  useEffect(() => {
-    helloWorldApi();
-  }, []);
+import SuperLayout from "@/components/super/SuperLayout";
+import SuperDashboard from "@/pages/super/SuperDashboard";
+import Restaurants from "@/pages/super/Restaurants";
+import Users from "@/pages/super/Users";
 
-  return (
-    <div>
-      <header className="App-header">
-        <a
-          data-testid={HOME.emergentLink}
-          className="App-link"
-          href="https://emergent.sh"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <img src="https://avatars.githubusercontent.com/in/1201222?s=120&u=2686cf91179bbafbc7a71bfbc43004cf9ae1acea&v=4" />
-        </a>
-        <p className="mt-5">Building something incredible ~!</p>
-      </header>
-    </div>
-  );
-};
+function Protected({ children, roles }) {
+  const { user } = useAuth();
+  if (user === null)
+    return (
+      <div className="min-h-screen grid place-items-center text-muted-foreground">
+        Carregando...
+      </div>
+    );
+  if (!user) return <Navigate to="/login" replace />;
+  if (roles && !roles.includes(user.role)) {
+    return <Navigate to={user.role === "super_admin" ? "/super" : "/admin"} replace />;
+  }
+  return children;
+}
 
 function App() {
   return (
-    <div className="App">
+    <AuthProvider>
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Home />}>
-            <Route index element={<Home />} />
+          <Route path="/" element={<Landing />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/loja/:slug" element={<MenuPage />} />
+
+          <Route
+            path="/admin"
+            element={
+              <Protected roles={["owner", "manager", "attendant", "kitchen"]}>
+                <AdminLayout />
+              </Protected>
+            }
+          >
+            <Route index element={<Dashboard />} />
+            <Route path="pedidos" element={<Orders />} />
+            <Route path="produtos" element={<Products />} />
+            <Route path="categorias" element={<Categories />} />
+            <Route path="cupons" element={<Coupons />} />
+            <Route path="banners" element={<Banners />} />
+            <Route path="relatorios" element={<Reports />} />
+            <Route path="configuracoes" element={<Settings />} />
           </Route>
+
+          <Route
+            path="/super"
+            element={
+              <Protected roles={["super_admin"]}>
+                <SuperLayout />
+              </Protected>
+            }
+          >
+            <Route index element={<SuperDashboard />} />
+            <Route path="restaurantes" element={<Restaurants />} />
+            <Route path="usuarios" element={<Users />} />
+          </Route>
+
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        <Toaster position="top-center" richColors />
       </BrowserRouter>
-    </div>
+    </AuthProvider>
   );
 }
 

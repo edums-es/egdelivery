@@ -1,0 +1,314 @@
+import { useState, useMemo } from "react";
+import { toast } from "sonner";
+import {
+  Sheet, SheetContent, SheetHeader, SheetTitle,
+} from "@/components/ui/sheet";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
+} from "@/components/ui/select";
+import { Minus, Plus, Trash2, MessageCircle, ShoppingBag, ArrowLeft, Ticket, Check } from "lucide-react";
+import { useCart } from "@/context/CartContext";
+import api, { formatApiError } from "@/lib/api";
+import { brl } from "@/lib/format";
+
+export default function CartSheet({ open, onOpenChange, restaurant, slug }) {
+  const { items, updateQuantity, removeItem, subtotal, clearCart } = useCart();
+  const [step, setStep] = useState("cart"); // cart | checkout
+  const [submitting, setSubmitting] = useState(false);
+
+  // coupon
+  const [couponInput, setCouponInput] = useState("");
+  const [coupon, setCoupon] = useState(null);
+
+  // checkout fields
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [type, setType] = useState(restaurant?.accepts_delivery ? "delivery" : "pickup");
+  const [cep, setCep] = useState("");
+  const [street, setStreet] = useState("");
+  const [number, setNumber] = useState("");
+  const [neighborhood, setNeighborhood] = useState("");
+  const [complement, setComplement] = useState("");
+  const [reference, setReference] = useState("");
+  const [payment, setPayment] = useState(restaurant?.payment_methods?.[0] || "Dinheiro");
+  const [changeFor, setChangeFor] = useState("");
+  const [orderNotes, setOrderNotes] = useState("");
+
+  const zones = restaurant?.delivery_zones || [];
+
+  const deliveryFee = useMemo(() => {
+    if (type === "pickup") return 0;
+    if (coupon?.free_delivery) return 0;
+    if (restaurant?.delivery_fee_mode === "neighborhood") {
+      const z = zones.find((z) => z.neighborhood === neighborhood && z.active);
+      return z ? z.fee : 0;
+    }
+    return restaurant?.flat_delivery_fee || 0;
+  }, [type, neighborhood, coupon, restaurant, zones]);
+
+  const discount = coupon?.discount || 0;
+  const total = Math.max(0, subtotal + deliveryFee - discount);
+
+  const applyCoupon = async () => {
+    if (!couponInput.trim()) return;
+    try {
+      const { data } = await api.post(`/public/restaurants/${slug}/validate-coupon`, {
+        code: couponInput, subtotal,
+      });
+      setCoupon(data);
+      toast.success("Cupom aplicado!");
+    } catch (err) {
+      setCoupon(null);
+      toast.error(formatApiError(err.response?.data?.detail) || "Cupom inválido");
+    }
+  };
+
+  const buildOrderPayload = () => ({
+    type,
+    customer: { name, phone },
+    address: type === "delivery"
+      ? { cep, street, number, neighborhood, complement, reference }
+      : null,
+    items: items.map((i) => ({
+      product_id: i.product.id,
+      product_name: i.product.name,
+      quantity: i.quantity,
+      unit_price: i.unitPrice,
+      options: i.selectedOptions,
+      notes: i.notes || "",
+      total_price: i.unitPrice * i.quantity,
+    })),
+    subtotal,
+    delivery_fee: deliveryFee,
+    discount,
+    total,
+    coupon_code: coupon?.code || null,
+    payment_method: payment,
+    change_for: payment === "Dinheiro" && changeFor ? parseFloat(changeFor) : null,
+    customer_notes: orderNotes,
+  });
+
+  const validate = () => {
+    if (!name.trim() || !phone.trim()) { toast.error("Informe nome e telefone"); return false; }
+    if (type === "delivery" && (!street.trim() || !number.trim() || !neighborhood.trim())) {
+      toast.error("Preencha o endereço de entrega"); return false;
+    }
+    if (subtotal < (restaurant?.minimum_order || 0)) {
+      toast.error(`Pedido mínimo de ${brl(restaurant.minimum_order)}`); return false;
+    }
+    return true;
+  };
+
+  const buildWhatsappMessage = (orderNumber) => {
+    const lines = [];
+    lines.push(`*Novo pedido pelo cardápio digital* 🍔`);
+    if (orderNumber) lines.push(`Pedido #${orderNumber}`);
+    lines.push("");
+    lines.push(`*Cliente:* ${name}`);
+    lines.push(`*Telefone:* ${phone}`);
+    lines.push(`*Tipo:* ${type === "delivery" ? "Entrega" : "Retirada"}`);
+    if (type === "delivery") {
+      lines.push(`*Endereço:* ${street}, ${number} - ${neighborhood}`);
+      if (complement) lines.push(`*Complemento:* ${complement}`);
+      if (reference) lines.push(`*Referência:* ${reference}`);
+    }
+    lines.push("");
+    lines.push("*Pedido:*");
+    items.forEach((i) => {
+      lines.push(`${i.quantity}x ${i.product.name} — ${brl(i.unitPrice * i.quantity)}`);
+      i.selectedOptions.forEach((o) =>
+        lines.push(`   + ${o.name}${o.price ? ` (${brl(o.price)})` : ""}`));
+      if (i.notes) lines.push(`   _Obs: ${i.notes}_`);
+    });
+    lines.push("");
+    lines.push(`*Subtotal:* ${brl(subtotal)}`);
+    if (type === "delivery") lines.push(`*Entrega:* ${brl(deliveryFee)}`);
+    if (discount > 0) lines.push(`*Desconto:* -${brl(discount)}`);
+    lines.push(`*Total:* ${brl(total)}`);
+    lines.push("");
+    lines.push(`*Pagamento:* ${payment}`);
+    if (payment === "Dinheiro" && changeFor) lines.push(`*Troco para:* ${brl(parseFloat(changeFor))}`);
+    if (orderNotes) lines.push(`*Observação:* ${orderNotes}`);
+    return encodeURIComponent(lines.join("\n"));
+  };
+
+  const submit = async (viaWhatsapp) => {
+    if (!validate()) return;
+    setSubmitting(true);
+    try {
+      const { data } = await api.post(`/public/restaurants/${slug}/orders`, buildOrderPayload());
+      if (viaWhatsapp && restaurant?.whatsapp) {
+        const msg = buildWhatsappMessage(data.order_number);
+        window.open(`https://wa.me/${restaurant.whatsapp}?text=${msg}`, "_blank");
+      }
+      toast.success(`Pedido #${data.order_number} enviado com sucesso!`);
+      clearCart();
+      setStep("cart");
+      onOpenChange(false);
+    } catch (err) {
+      toast.error(formatApiError(err.response?.data?.detail) || "Erro ao finalizar pedido");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="bottom" className="max-w-md mx-auto rounded-t-2xl max-h-[92vh] overflow-y-auto p-0">
+        <SheetHeader className="p-4 border-b sticky top-0 bg-white z-10">
+          <SheetTitle className="font-display flex items-center gap-2">
+            {step === "checkout" && (
+              <button onClick={() => setStep("cart")} data-testid="checkout-back">
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+            )}
+            {step === "cart" ? "Seu pedido" : "Finalizar pedido"}
+          </SheetTitle>
+        </SheetHeader>
+
+        {items.length === 0 ? (
+          <div className="p-10 text-center text-gray-400">
+            <ShoppingBag className="w-12 h-12 mx-auto mb-3 opacity-40" />
+            <p>Seu carrinho está vazio.</p>
+          </div>
+        ) : step === "cart" ? (
+          <div className="p-4 space-y-4">
+            {items.map((i) => (
+              <div key={i.lineId} className="flex gap-3" data-testid="cart-item">
+                <div className="flex-1">
+                  <p className="font-medium text-sm">{i.product.name}</p>
+                  {i.selectedOptions.map((o, idx) => (
+                    <p key={idx} className="text-xs text-gray-400">+ {o.name}</p>
+                  ))}
+                  {i.notes && <p className="text-xs text-gray-400 italic">Obs: {i.notes}</p>}
+                  <p className="text-sm font-semibold brand-text mt-1">{brl(i.unitPrice * i.quantity)}</p>
+                </div>
+                <div className="flex flex-col items-end gap-2">
+                  <button onClick={() => removeItem(i.lineId)} data-testid="cart-remove" className="text-gray-300 hover:text-red-500">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                  <div className="flex items-center gap-2 border rounded-full px-1.5 py-0.5">
+                    <button onClick={() => updateQuantity(i.lineId, -1)} className="w-6 h-6 grid place-items-center"><Minus className="w-3 h-3" /></button>
+                    <span className="text-sm w-4 text-center">{i.quantity}</span>
+                    <button onClick={() => updateQuantity(i.lineId, 1)} className="w-6 h-6 grid place-items-center"><Plus className="w-3 h-3" /></button>
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {/* coupon */}
+            <div className="flex gap-2 pt-2">
+              <div className="relative flex-1">
+                <Ticket className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <Input value={couponInput} onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
+                  placeholder="Cupom" data-testid="coupon-input" className="pl-9" />
+              </div>
+              <Button variant="outline" onClick={applyCoupon} data-testid="coupon-apply">Aplicar</Button>
+            </div>
+            {coupon && (
+              <p className="text-xs text-green-600 flex items-center gap-1"><Check className="w-3 h-3" /> Cupom {coupon.code} aplicado</p>
+            )}
+
+            <div className="border-t pt-3 space-y-1.5 text-sm">
+              <div className="flex justify-between text-gray-500"><span>Subtotal</span><span>{brl(subtotal)}</span></div>
+              {discount > 0 && <div className="flex justify-between text-green-600"><span>Desconto</span><span>-{brl(discount)}</span></div>}
+              <div className="flex justify-between font-display font-bold text-base"><span>Total</span><span>{brl(subtotal - discount)}</span></div>
+            </div>
+
+            <Button onClick={() => setStep("checkout")} data-testid="goto-checkout"
+              className="w-full brand-bg hover:opacity-90 h-12 rounded-xl">Continuar</Button>
+          </div>
+        ) : (
+          <div className="p-4 space-y-4">
+            <div className="grid grid-cols-2 gap-2">
+              {restaurant?.accepts_delivery && (
+                <button onClick={() => setType("delivery")} data-testid="type-delivery"
+                  className={`py-2.5 rounded-xl border text-sm font-medium ${type === "delivery" ? "brand-bg border-transparent" : "border-gray-200"}`}>Entrega</button>
+              )}
+              {restaurant?.accepts_pickup && (
+                <button onClick={() => setType("pickup")} data-testid="type-pickup"
+                  className={`py-2.5 rounded-xl border text-sm font-medium ${type === "pickup" ? "brand-bg border-transparent" : "border-gray-200"}`}>Retirada</button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Nome</Label><Input value={name} onChange={(e) => setName(e.target.value)} data-testid="checkout-name" className="mt-1" /></div>
+              <div><Label>Telefone</Label><Input value={phone} onChange={(e) => setPhone(e.target.value)} data-testid="checkout-phone" className="mt-1" /></div>
+            </div>
+
+            {type === "delivery" && (
+              <div className="space-y-3">
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="col-span-2"><Label>Rua</Label><Input value={street} onChange={(e) => setStreet(e.target.value)} data-testid="checkout-street" className="mt-1" /></div>
+                  <div><Label>Número</Label><Input value={number} onChange={(e) => setNumber(e.target.value)} data-testid="checkout-number" className="mt-1" /></div>
+                </div>
+                <div>
+                  <Label>Bairro</Label>
+                  {zones.length > 0 ? (
+                    <Select value={neighborhood} onValueChange={setNeighborhood}>
+                      <SelectTrigger data-testid="checkout-neighborhood" className="mt-1"><SelectValue placeholder="Selecione o bairro" /></SelectTrigger>
+                      <SelectContent>
+                        {zones.filter((z) => z.active).map((z) => (
+                          <SelectItem key={z.id} value={z.neighborhood}>{z.neighborhood} · {brl(z.fee)}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input value={neighborhood} onChange={(e) => setNeighborhood(e.target.value)} data-testid="checkout-neighborhood" className="mt-1" />
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div><Label>Complemento</Label><Input value={complement} onChange={(e) => setComplement(e.target.value)} className="mt-1" /></div>
+                  <div><Label>Referência</Label><Input value={reference} onChange={(e) => setReference(e.target.value)} className="mt-1" /></div>
+                </div>
+              </div>
+            )}
+
+            <div>
+              <Label>Forma de pagamento</Label>
+              <Select value={payment} onValueChange={setPayment}>
+                <SelectTrigger data-testid="checkout-payment" className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {(restaurant?.payment_methods || ["Dinheiro"]).map((m) => (
+                    <SelectItem key={m} value={m}>{m}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {payment === "Dinheiro" && (
+              <div><Label>Troco para</Label><Input type="number" value={changeFor} onChange={(e) => setChangeFor(e.target.value)} placeholder="Ex: 100" data-testid="checkout-change" className="mt-1" /></div>
+            )}
+            {payment === "Pix" && restaurant?.pix_key && (
+              <div className="text-xs bg-gray-50 border rounded-xl p-3">
+                <p className="font-semibold">Chave Pix: {restaurant.pix_key}</p>
+                <p className="text-gray-500">{restaurant.pix_name}</p>
+              </div>
+            )}
+
+            <div><Label>Observação do pedido</Label><Textarea value={orderNotes} onChange={(e) => setOrderNotes(e.target.value)} rows={2} className="mt-1 resize-none" data-testid="checkout-notes" /></div>
+
+            <div className="border-t pt-3 space-y-1.5 text-sm">
+              <div className="flex justify-between text-gray-500"><span>Subtotal</span><span>{brl(subtotal)}</span></div>
+              {type === "delivery" && <div className="flex justify-between text-gray-500"><span>Entrega</span><span>{brl(deliveryFee)}</span></div>}
+              {discount > 0 && <div className="flex justify-between text-green-600"><span>Desconto</span><span>-{brl(discount)}</span></div>}
+              <div className="flex justify-between font-display font-bold text-lg"><span>Total</span><span>{brl(total)}</span></div>
+            </div>
+
+            <div className="space-y-2 pb-2">
+              <Button onClick={() => submit(true)} disabled={submitting} data-testid="submit-whatsapp"
+                className="w-full h-12 rounded-xl text-white" style={{ backgroundColor: "#25D366" }}>
+                <MessageCircle className="w-5 h-5 mr-1" /> Enviar pelo WhatsApp
+              </Button>
+              <Button onClick={() => submit(false)} disabled={submitting} variant="outline" data-testid="submit-internal"
+                className="w-full h-12 rounded-xl">Finalizar no painel</Button>
+            </div>
+          </div>
+        )}
+      </SheetContent>
+    </Sheet>
+  );
+}
