@@ -5,7 +5,8 @@ import { useTheme } from "@/context/ThemeContext";
 import { Button } from "@/components/ui/button";
 import {
   LayoutDashboard, Store, Users, LogOut, ShieldCheck,
-  CreditCard, DollarSign, UserPlus, Handshake, Layers, Bell, ChevronDown, ChevronRight, Menu,
+  CreditCard, DollarSign, UserPlus, Handshake, Layers, Bell,
+  ChevronDown, ChevronRight, Menu, Settings,
 } from "lucide-react";
 
 const NAV_GROUPS = [
@@ -36,6 +37,7 @@ const NAV_GROUPS = [
     items: [
       { to: "/super/restaurantes", label: "Restaurantes", icon: Store },
       { to: "/super/usuarios", label: "Usuários", icon: Users },
+      { to: "/super/configuracoes", label: "Configurações", icon: Settings },
     ],
   },
 ];

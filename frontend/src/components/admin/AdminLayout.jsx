@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Outlet, NavLink, useNavigate, Link } from "react-router-dom";
+import { useOneSignal } from "@/hooks/useOneSignal";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 import api from "@/lib/api";
@@ -87,6 +88,7 @@ function NavGroup({ group, onClose }) {
 
 export default function AdminLayout() {
   const { user, logout } = useAuth();
+  useOneSignal({ restaurantId: user?.restaurant_id, enabled: !!user?.restaurant_id });
   const { } = useTheme();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);

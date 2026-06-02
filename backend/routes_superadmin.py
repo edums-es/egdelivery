@@ -216,3 +216,71 @@ async def metrics_chart(user=Depends(SUPER)):
             days[d]["new_restaurants"] += 1
 
     return [{"date": k, **v} for k, v in days.items()]
+
+
+# ── Platform Settings (OneSignal, Twilio global, etc.) ────────────────────
+
+@router.get("/platform-settings")
+async def get_platform_settings(user=Depends(SUPER)):
+    """Retorna as configurações globais da plataforma."""
+    cfg = await db.platform_settings.find_one({"_id": "global"}, {"_id": 0})
+    if not cfg:
+        cfg = {}
+    # Nunca retorna chaves secretas em texto puro — mascara
+    safe = {k: ("***" if "secret" in k.lower() or "key" in k.lower() or "token" in k.lower() else v)
+            for k, v in cfg.items()}
+    return safe
+
+
+@router.put("/platform-settings")
+async def update_platform_settings(body: dict, user=Depends(SUPER)):
+    """Salva configurações globais da plataforma."""
+    # Remove valores mascarados para não sobrescrever com ***
+    clean = {k: v for k, v in body.items() if v != "***" and v is not None and str(v).strip() != ""}
+    if not clean:
+        return {"ok": True}
+    await db.platform_settings.update_one(
+        {"_id": "global"},
+        {"$set": clean},
+        upsert=True,
+    )
+    return {"ok": True}
+
+
+@router.post("/test-push")
+async def test_push_notification(user=Depends(SUPER)):
+    """Envia uma notificação push de teste para todos os clientes OneSignal cadastrados."""
+    import httpx as _httpx
+    app_id = await get_platform_setting("onesignal_app_id", "")
+    api_key = await get_platform_setting("onesignal_api_key", "")
+    if not app_id or not api_key:
+        raise HTTPException(400, "OneSignal não configurado. Preencha o App ID e a API Key.")
+    try:
+        async with _httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(
+                "https://onesignal.com/api/v1/notifications",
+                headers={"Authorization": f"Basic {api_key}", "Content-Type": "application/json"},
+                json={
+                    "app_id": app_id,
+                    "included_segments": ["Total Subscriptions"],
+                    "headings": {"pt": "🔔 Teste da Plataforma"},
+                    "contents": {"pt": "Notificações push estão funcionando corretamente!"},
+                    "priority": 10,
+                },
+            )
+            data = resp.json()
+            if resp.status_code >= 400:
+                raise HTTPException(400, data.get("errors", ["Erro desconhecido"])[0])
+            return {"ok": True, "recipients": data.get("recipients", 0)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"Falha ao conectar ao OneSignal: {str(e)}")
+
+
+async def get_platform_setting(key: str, fallback: str = ""):
+    """Helper para ler uma configuração de plataforma do banco."""
+    import os
+    # Prioridade: banco → variável de ambiente → fallback
+    cfg = await db.platform_settings.find_one({"_id": "global"}, {"_id": 0, key: 1})
+    return (cfg or {}).get(key) or os.environ.get(key.upper(), fallback)

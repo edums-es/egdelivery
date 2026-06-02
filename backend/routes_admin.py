@@ -10,6 +10,7 @@ from fastapi.responses import StreamingResponse
 from db import db
 from auth import require_restaurant
 from whatsapp import notify_order_status
+from routes_ws import broadcast as ws_broadcast
 from models import (
     CategoryIn, ProductIn, CouponIn, BannerIn, RestaurantSettings, StatusUpdate,
     ORDER_STATUSES, clean, new_id, now_iso, is_restaurant_open,
@@ -303,6 +304,7 @@ async def update_order_status(oid: str, data: StatusUpdate, user=Depends(require
     order = await db.orders.find_one({"id": oid}, {"_id": 0})
     # Fire-and-forget WhatsApp notification
     asyncio.create_task(notify_order_status(order, data.status))
+    asyncio.create_task(ws_broadcast(order['restaurant_id'], 'order_updated', {'id': order['id'], 'status': data.status}))
     return order
 
 

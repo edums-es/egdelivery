@@ -6,9 +6,23 @@ from fastapi import APIRouter, HTTPException
 
 from db import db
 from whatsapp import send_whatsapp
+from routes_ws import broadcast as ws_broadcast
 from models import OrderIn, clean, is_restaurant_open, new_id, now_iso
 
 router = APIRouter(prefix="/api/public", tags=["public"])
+
+
+@router.get("/platform-config")
+async def public_platform_config():
+    """Retorna configurações públicas da plataforma (sem segredos).
+    Usado pelo frontend para inicializar OneSignal sem hardcode de env."""
+    from routes_superadmin import get_platform_setting
+    app_id = await get_platform_setting("onesignal_app_id", "")
+    push_enabled = await get_platform_setting("push_notifications_enabled", "true")
+    return {
+        "onesignal_app_id": app_id,
+        "push_enabled": str(push_enabled).lower() not in ("false", "0", ""),
+    }
 
 
 async def _get_restaurant_or_404(slug: str):
@@ -154,6 +168,31 @@ async def _notify_new_order(restaurant: dict, order: dict, order_in, pix_via_ope
         _logger.error(f"_notify_new_order falhou: {exc}", exc_info=True)
 
 
+async def _push_onesignal(restaurant_id: str, order_number: int, title: str):
+    """Envia push via OneSignal — credenciais lidas do banco (Super Admin config)."""
+    import httpx as _httpx
+    from routes_superadmin import get_platform_setting
+    app_id = await get_platform_setting("onesignal_app_id")
+    api_key = await get_platform_setting("onesignal_api_key")
+    if not app_id or not api_key:
+        return
+    try:
+        async with _httpx.AsyncClient(timeout=5) as client:
+            await client.post(
+                "https://onesignal.com/api/v1/notifications",
+                headers={"Authorization": f"Basic {api_key}", "Content-Type": "application/json"},
+                json={
+                    "app_id": app_id,
+                    "filters": [{"field": "tag", "key": "restaurant_id", "relation": "=", "value": restaurant_id}],
+                    "headings": {"pt": title},
+                    "contents": {"pt": f"Pedido #{order_number} aguardando confirmação"},
+                    "priority": 10,
+                },
+            )
+    except Exception as e:
+        pass  # Push failure never blocks order
+
+
 def brl_fmt(value):
     try:
         return f"R$ {float(value):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
@@ -187,6 +226,9 @@ async def create_order(slug: str, order: OrderIn):
 
     # Notify restaurant owner about new order
     import asyncio
+    # Notifica via WebSocket (tempo real)
+    asyncio.create_task(ws_broadcast(r['id'], 'new_order', {'order_number': order_number, 'id': doc['id']}))
+    asyncio.create_task(_push_onesignal(r['id'], order_number, f"🔔 Novo pedido #{order_number}!"))
     # Notify after OpenPix check so we know if pix was automatic
 
     if order.coupon_code:

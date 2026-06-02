@@ -158,3 +158,20 @@ async def me(user: dict = Depends(get_current_user)):
 @router.post("/logout")
 async def logout(user: dict = Depends(get_current_user)):
     return {"ok": True}
+
+
+async def verify_token_ws(token: str):
+    """Valida JWT para conexões WebSocket (sem HTTPException)."""
+    try:
+        from jose import jwt as _jwt, JWTError
+        import os
+        SECRET = os.environ.get("JWT_SECRET", "dev-secret")
+        payload = _jwt.decode(token, SECRET, algorithms=["HS256"])
+        user_id = payload.get("sub")
+        if not user_id:
+            return None
+        from db import db
+        user = await db.users.find_one({"id": user_id}, {"_id": 0, "password": 0})
+        return user
+    except Exception:
+        return None

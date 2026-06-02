@@ -14,6 +14,7 @@ import auth
 import storage
 import whatsapp
 import routes_extras
+import routes_ws
 import routes_public
 import routes_admin
 import routes_superadmin
@@ -47,6 +48,7 @@ app.include_router(routes_superadmin.router)
 app.include_router(routes_advanced.router)
 app.include_router(routes_advanced.public_router)
 app.include_router(routes_billing.router)
+app.include_router(routes_ws.router)
 
 app.add_middleware(
     CORSMiddleware,

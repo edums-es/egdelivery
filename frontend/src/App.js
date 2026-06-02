@@ -35,6 +35,7 @@ import Billing from "@/pages/super/Billing";
 import Alerts from "@/pages/super/Alerts";
 import Affiliates from "@/pages/super/Affiliates";
 import Resellers from "@/pages/super/Resellers";
+import PlatformSettings from "@/pages/super/PlatformSettings";
 
 function Protected({ children, roles }) {
   const { user } = useAuth();
@@ -85,6 +86,7 @@ function App() {
               <Route path="alertas" element={<Alerts />} />
               <Route path="afiliados" element={<Affiliates />} />
               <Route path="revenda" element={<Resellers />} />
+              <Route path="configuracoes" element={<PlatformSettings />} />
             </Route>
 
             <Route path="*" element={<Navigate to="/" replace />} />

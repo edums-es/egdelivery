@@ -12,6 +12,8 @@ import {
   ShoppingBag, CheckCircle2, XCircle, Bike, Bell, Search, Filter,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useOrdersWS } from "@/hooks/useOrdersWS";
+import { useAuth } from "@/context/AuthContext";
 
 // ── Status config ──────────────────────────────────────────────────────────
 const COLUMNS = [
@@ -370,10 +372,27 @@ export default function Orders() {
     }
   }, []);
 
+  // Auth context para pegar token e restaurant_id
+  const { user, token } = useAuth();
+
+  // WebSocket para tempo real — substitui a maior parte do polling
+  useOrdersWS({
+    restaurantId: user?.restaurant_id,
+    token: token,
+    onNewOrder: useCallback((data) => {
+      playBeep('new');
+      toast.info(`🔔 Novo pedido #${data.order_number}!`, { duration: 6000 });
+      load(true);
+    }, [load, playBeep]),
+    onOrderUpdated: useCallback(() => {
+      load(true);
+    }, [load]),
+  });
+
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
-    // Polling a cada 5 segundos
-    const t = setInterval(() => load(true), 5000);
+    // Polling de fallback a cada 30s (WS cuida do tempo real)
+    const t = setInterval(() => load(true), 30000);
     // Atualiza imediatamente ao focar na aba
     const onVisible = () => { if (document.visibilityState === "visible") load(true); };
     document.addEventListener("visibilitychange", onVisible);
