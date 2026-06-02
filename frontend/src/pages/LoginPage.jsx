@@ -175,24 +175,7 @@ export default function LoginPage() {
                 </button>
               </form>
 
-              {/* Test accounts */}
-              <div style={{ marginTop: 24, background: "#111", border: "1px solid #1e1e1e", borderRadius: 12, padding: 16 }}>
-                <p style={{ margin: "0 0 12px", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#444" }}>Contas de teste</p>
-                <button type="button" onClick={() => { setEmail("dono@burger.com"); setPassword("dono123"); }}
-                  style={{ width: "100%", background: "none", border: "none", cursor: "pointer", textAlign: "left", padding: "8px 10px", borderRadius: 8, marginBottom: 4, transition: "background .15s" }}
-                  onMouseEnter={(e) => e.currentTarget.style.background = "#1a1a1a"}
-                  onMouseLeave={(e) => e.currentTarget.style.background = "none"}>
-                  <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: "#999" }}>Restaurante</p>
-                  <p style={{ margin: 0, fontSize: 11, color: "#444" }}>dono@burger.com · dono123</p>
-                </button>
-                <button type="button" onClick={() => { setEmail("super@menudigital.com"); setPassword("super123"); }}
-                  style={{ width: "100%", background: "none", border: "none", cursor: "pointer", textAlign: "left", padding: "8px 10px", borderRadius: 8, transition: "background .15s" }}
-                  onMouseEnter={(e) => e.currentTarget.style.background = "#1a1a1a"}
-                  onMouseLeave={(e) => e.currentTarget.style.background = "none"}>
-                  <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: G }}>Super Admin</p>
-                  <p style={{ margin: 0, fontSize: 11, color: "#444" }}>super@menudigital.com · super123</p>
-                </button>
-              </div>
+
             </div>
           ) : (
             <div>
