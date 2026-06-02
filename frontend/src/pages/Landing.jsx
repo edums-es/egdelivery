@@ -452,11 +452,13 @@ export default function Landing(){
     <div style={{borderTop:`1px solid ${G}10`,paddingTop:18,display:"flex",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
       <span style={{color:"#333",fontSize:12}}>© {new Date().getFullYear()} Marisco 27 — Todos os direitos reservados</span>
       <a href="https://www.instagram.com/easygrowtth/" target="_blank" rel="noreferrer"
-        style={{display:"flex",alignItems:"center",gap:6,textDecoration:"none"}}
-        onMouseEnter={e=>e.currentTarget.style.opacity=".7"}
+        style={{display:"flex",alignItems:"center",gap:10,textDecoration:"none",transition:"opacity .2s"}}
+        onMouseEnter={e=>e.currentTarget.style.opacity=".8"}
         onMouseLeave={e=>e.currentTarget.style.opacity="1"}>
-        <img src="/logoeg.png" alt="Easy Growth" style={{height:18,width:"auto",filter:"brightness(0) invert(.4)"}}/>
-        <span style={{color:"#444",fontSize:11}}>Desenvolvido pela Easy Growth</span>
+        <img src="/logoeg.png" alt="Easy Growth" style={{height:32,width:"auto"}}/>
+        <span style={{fontSize:14,fontWeight:600,fontFamily:"Manrope,sans-serif",color:"#ccc"}}>
+          Desenvolvido pela <span style={{color:"#31f199"}}>Easy Growth</span>
+        </span>
       </a>
     </div>
   </div>

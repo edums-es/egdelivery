@@ -164,15 +164,16 @@ function MenuContent({ data, slug }) {
                 const hasText = b.title || b.subtitle;
                 return (
                   <div key={b.id} onClick={() => linked && setSelectedProduct(linked)}
-                    className={`relative shrink-0 w-[88%] rounded-2xl overflow-hidden snap-start border border-white/10 ${linked ? "cursor-pointer" : ""}`}
-                    style={{aspectRatio:"16/7"}}>
+                    className={`relative shrink-0 w-[85%] rounded-2xl overflow-hidden snap-start border border-white/10 ${linked ? "cursor-pointer" : ""}`}
+                    style={{height:160}}>
                     {b.image_url
-                      ? <img src={b.image_url} alt={b.title || ""} className="w-full h-full object-cover object-center"/>
-                      : <div className="w-full h-full bg-[#1A1A1A]"/>}
+                      ? <img src={b.image_url} alt={b.title || ""}
+                          style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover",objectPosition:"center"}}/>
+                      : <div style={{position:"absolute",inset:0,background:"#1A1A1A"}}/>}
                     {hasText && (
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent p-4 flex flex-col justify-end">
-                        {b.title && <p className="text-white font-display font-bold text-base leading-tight drop-shadow">{b.title}</p>}
-                        {b.subtitle && <p className="text-white/80 text-xs mt-0.5 drop-shadow">{b.subtitle}</p>}
+                      <div style={{position:"absolute",inset:0,background:"linear-gradient(to top, rgba(0,0,0,.82) 0%, rgba(0,0,0,.25) 50%, transparent 100%)",padding:"12px 14px",display:"flex",flexDirection:"column",justifyContent:"flex-end"}}>
+                        {b.title && <p className="text-white font-display font-bold leading-tight" style={{fontSize:15,margin:0,textShadow:"0 1px 4px rgba(0,0,0,.6)"}}>{b.title}</p>}
+                        {b.subtitle && <p style={{color:"rgba(255,255,255,.8)",fontSize:11,margin:"3px 0 0",textShadow:"0 1px 3px rgba(0,0,0,.5)"}}>{b.subtitle}</p>}
                         {linked && <span className="mt-2 text-xs font-bold px-2 py-0.5 rounded-full w-fit" style={{background:accent,color:hexFg(accent)}}>Ver produto →</span>}
                       </div>
                     )}
@@ -334,8 +335,10 @@ function MenuContent({ data, slug }) {
           style={{display:"inline-flex",alignItems:"center",gap:6,textDecoration:"none",opacity:.5,transition:"opacity .2s"}}
           onMouseEnter={e=>e.currentTarget.style.opacity="1"}
           onMouseLeave={e=>e.currentTarget.style.opacity=".5"}>
-          <img src="/logoeg.png" alt="Easy Growth" style={{height:16,width:"auto",filter:"brightness(0) invert(1)"}}/>
-          <span style={{color:"#888",fontSize:11,fontFamily:"Manrope,sans-serif"}}>Desenvolvido pela Easy Growth</span>
+          <img src="/logoeg.png" alt="Easy Growth" style={{height:30,width:"auto"}}/>
+          <span style={{fontSize:14,fontWeight:600,fontFamily:"Manrope,sans-serif",color:"#ccc"}}>
+            Desenvolvido pela <span style={{color:"#31f199"}}>Easy Growth</span>
+          </span>
         </a>
       </div>
     </div>
