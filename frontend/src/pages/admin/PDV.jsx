@@ -78,17 +78,20 @@ export default function PDV() {
   const [receiptOpen, setReceiptOpen] = useState(false);
   const [receiptData, setReceiptData] = useState(null);
   const [summary, setSummary] = useState(null);
+  const [restaurant, setRestaurant] = useState(null);
   const [lastPendingIds, setLastPendingIds] = useState(new Set());
   const playSound = useNotificationSound();
 
   const loadProducts = async () => {
     try {
-      const [productsRes, categoriesRes] = await Promise.all([
+      const [productsRes, categoriesRes, restaurantRes] = await Promise.all([
         api.get("/admin/products"),
         api.get("/admin/categories"),
+        api.get("/admin/restaurant"),
       ]);
       setProducts(productsRes.data.filter((p) => p.is_available));
       setCategories(categoriesRes.data);
+      setRestaurant(restaurantRes.data);
     } catch {
       toast.error("Erro ao carregar produtos");
     }
@@ -255,7 +258,7 @@ export default function PDV() {
         </style>
       </head>
       <body>
-        <h2>MariscoDelivery</h2>
+        <h2>${restaurant?.name || "Restaurante"}</h2>
         <p class="center">Recibo de Venda PDV</p>
         <p class="center">${new Date().toLocaleString("pt-BR")}</p>
         <hr class="divider"/>

@@ -9,7 +9,7 @@ import {
   LayoutDashboard, ClipboardList, UtensilsCrossed, FolderTree, Ticket,
   Image, BarChart3, Settings, LogOut, Menu, X, ExternalLink,
   PackageSearch, Gift, Layers, Users, Building2, ShoppingCart,
-  Wallet, Truck, QrCode, ChevronDown, ChevronRight,
+  Wallet, Truck, QrCode, ChevronDown, ChevronRight, MessageCircle,
 } from "lucide-react";
 
 const NAV_GROUPS = [
@@ -52,6 +52,7 @@ const NAV_GROUPS = [
     label: "Gestão",
     items: [
       { to: "/supermaster/relatorios",   label: "Relatórios",    icon: BarChart3 },
+      { to: "/supermaster/whatsapp",     label: "WhatsApp",      icon: MessageCircle },
       { to: "/supermaster/configuracoes", label: "Configurações", icon: Settings },
     ],
   },

@@ -46,12 +46,38 @@ def _brl(value: float) -> str:
 # Send helpers
 # ---------------------------------------------------------------------------
 
+async def _send_via_wa_service(restaurant: dict, to_phone: str, message: str) -> bool:
+    """Tenta enviar via whatsapp-service local (QR code). Retorna True se enviado."""
+    try:
+        import httpx as _httpx
+        wa_url = os.environ.get("WA_SERVICE_URL", "http://whatsapp-service:3001")
+        async with _httpx.AsyncClient(timeout=5) as client:
+            resp = await client.post(
+                f"{wa_url}/session/{restaurant['id']}/send",
+                json={"phone": to_phone, "message": message},
+            )
+            if resp.status_code == 200 and resp.json().get("ok"):
+                logger.info(f"WA service: mensagem enviada para {to_phone}")
+                return True
+    except Exception as e:
+        logger.debug(f"WA service indisponível, tentando Twilio: {e}")
+    return False
+
+
 async def send_whatsapp(restaurant: dict, to_phone: str, message: str) -> bool:
-    """Send a WhatsApp message to a customer. Returns True on success."""
+    """
+    Envia mensagem WhatsApp ao cliente.
+    Prioridade: 1) whatsapp-service (QR code) → 2) Twilio (API paga)
+    """
+    # 1. Tenta serviço local QR
+    if await _send_via_wa_service(restaurant, to_phone, message):
+        return True
+
+    # 2. Fallback Twilio
     client = _get_client(restaurant)
     from_num = _from_number(restaurant)
     if not client or not from_num:
-        logger.warning("Twilio not configured — skipping WhatsApp send")
+        logger.warning("Nenhum canal WhatsApp configurado (WA service off + Twilio sem config)")
         return False
 
     raw = re.sub(r"\D", "", to_phone)
@@ -107,7 +133,7 @@ STATUS_MESSAGES = {
 
 
 async def notify_order_status(order: dict, new_status: str):
-    """Called whenever an order status changes. Sends WhatsApp if customer has phone."""
+    """Notifica cliente via WhatsApp quando status do pedido muda."""
     if new_status not in STATUS_MESSAGES:
         return
     customer_phone = (order.get("customer") or {}).get("phone", "")
@@ -118,10 +144,15 @@ async def notify_order_status(order: dict, new_status: str):
     if not restaurant:
         return
 
-    # Only notify if WhatsApp is configured
-    client = _get_client(restaurant)
-    if not client:
+    # Respeita configuração de quais status notificam (padrão: todos)
+    default_statuses = ["accepted", "preparing", "ready", "out_for_delivery", "completed", "cancelled"]
+    notify_statuses = restaurant.get("wa_notify_statuses", default_statuses)
+    if new_status not in notify_statuses:
+        logger.debug(f"Status {new_status} não notifica por WA (config do restaurante)")
         return
+
+    # Tenta enviar (WA service local → Twilio)
+    # Se nenhum canal configurado, entra mas send_whatsapp vai logar e retornar False
 
     public_url = os.environ.get("PUBLIC_URL", "http://localhost:3000")
     tracking_url = f"{public_url}/pedido/{order.get('id', '')}"

@@ -8,18 +8,32 @@ services:
     ports:
       - "27017:27017"
 
+  whatsapp-service:
+    build: ./whatsapp-service
+    container_name: mariscodelivery-whatsapp
+    restart: unless-stopped
+    environment:
+      PORT: 3001
+      SESSION_DIR: /app/sessions
+    volumes:
+      - wa_sessions:/app/sessions
+    ports:
+      - "3001:3001"
+
   backend:
     build: ./backend
     container_name: mariscodelivery-backend
     restart: unless-stopped
     depends_on:
       - mongo
+      - whatsapp-service
     environment:
       MONGO_URL: mongodb://mongo:27017
       DB_NAME: mariscodelivery
       JWT_SECRET: troque_por_uma_chave_forte_aqui
       UPLOAD_DIR: /app/uploads
       CORS_ORIGINS: "http://localhost:3000"
+      WA_SERVICE_URL: http://whatsapp-service:3001
     volumes:
       - uploads_data:/app/uploads
     ports:
@@ -40,3 +54,4 @@ services:
 volumes:
   mongo_data:
   uploads_data:
+  wa_sessions:

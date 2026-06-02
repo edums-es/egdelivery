@@ -20,6 +20,7 @@ import routes_admin
 import routes_superadmin
 import routes_advanced
 import routes_billing
+import routes_whatsapp
 from seed import seed
 
 logging.basicConfig(level=logging.INFO,
@@ -49,6 +50,7 @@ app.include_router(routes_advanced.router)
 app.include_router(routes_advanced.public_router)
 app.include_router(routes_billing.router)
 app.include_router(routes_ws.router)
+app.include_router(routes_whatsapp.router)
 
 app.add_middleware(
     CORSMiddleware,

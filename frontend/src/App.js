@@ -36,6 +36,7 @@ import Alerts from "@/pages/super/Alerts";
 import Affiliates from "@/pages/super/Affiliates";
 import Resellers from "@/pages/super/Resellers";
 import PlatformSettings from "@/pages/super/PlatformSettings";
+import WhatsApp from "@/pages/admin/WhatsApp";
 
 function Protected({ children, roles }) {
   const { user } = useAuth();
@@ -73,6 +74,7 @@ function App() {
               <Route path="cupons" element={<Coupons />} />
               <Route path="banners" element={<Banners />} />
               <Route path="relatorios" element={<Reports />} />
+              <Route path="whatsapp" element={<WhatsApp />} />
               <Route path="configuracoes" element={<Settings />} />
             </Route>
 
