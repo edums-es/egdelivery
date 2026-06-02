@@ -33,8 +33,8 @@ export default function Products() {
   const [editId, setEditId] = useState(null);
 
   const load = () => {
-    api.get("/admin/products").then((r) => setItems(r.data));
-    api.get("/admin/categories").then((r) => setCats(r.data));
+    api.get("/admin/products").then((r) => setItems(Array.isArray(r.data) ? r.data : [])).catch(() => setItems([]));
+    api.get("/admin/categories").then((r) => setCats(Array.isArray(r.data) ? r.data : [])).catch(() => setCats([]));
   };
   useEffect(() => { load(); }, []);
 
@@ -125,14 +125,14 @@ export default function Products() {
       </div>
 
       {items.length === 0 ? (
-        <div className="bg-white rounded-2xl border p-12 text-center text-gray-400">
+        <div className="bg-white dark:bg-gray-900 rounded-2xl border dark:border-gray-700 p-12 text-center text-gray-400">
           <UtensilsCrossed className="w-10 h-10 mx-auto mb-3 opacity-40" />
           <p>Você ainda não cadastrou nenhum produto. Comece adicionando o primeiro item do seu cardápio.</p>
         </div>
       ) : (
         <div className="grid gap-3">
           {items.map((p) => (
-            <div key={p.id} className="bg-white rounded-2xl border border-gray-100 p-3 flex gap-3 items-center" data-testid={`product-row-${p.id}`}>
+            <div key={p.id} className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-700 p-3 flex gap-3 items-center" data-testid={`product-row-${p.id}`}>
               <div className="w-16 h-16 rounded-xl bg-gray-100 overflow-hidden shrink-0">
                 {p.image_url && <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" />}
               </div>
