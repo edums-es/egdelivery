@@ -254,7 +254,7 @@ async def test_push_notification(user=Depends(SUPER)):
     app_id = await get_platform_setting("onesignal_app_id", "")
     api_key = await get_platform_setting("onesignal_api_key", "")
     if not app_id or not api_key:
-        raise HTTPException(400, "OneSignal não configurado. Preencha o App ID e a API Key.")
+        raise HTTPException(400, "OneSignal nao configurado. Preencha o App ID e a API Key.")
     try:
         async with _httpx.AsyncClient(timeout=10) as client:
             resp = await client.post(
@@ -263,14 +263,14 @@ async def test_push_notification(user=Depends(SUPER)):
                 json={
                     "app_id": app_id,
                     "included_segments": ["Total Subscriptions"],
-                    "headings": {"pt": "🔔 Teste da Plataforma"},
-                    "contents": {"pt": "Notificações push estão funcionando corretamente!"},
+                    "headings": {"pt": "Teste da Plataforma"},
+                    "contents": {"pt": "Notificacoes push estao funcionando corretamente!"},
                     "priority": 10,
                 },
             )
             data = resp.json()
             if resp.status_code >= 400:
-                raise HTTPException(400, data.get("errors", ["Erro desconhecido"])[0])
+                raise HTTPException(400, (data.get("errors") or ["Erro desconhecido"])[0])
             return {"ok": True, "recipients": data.get("recipients", 0)}
     except HTTPException:
         raise
@@ -279,8 +279,8 @@ async def test_push_notification(user=Depends(SUPER)):
 
 
 async def get_platform_setting(key: str, fallback: str = ""):
-    """Helper para ler uma configuração de plataforma do banco."""
-    import os
-    # Prioridade: banco → variável de ambiente → fallback
+    """Helper para ler uma configuracao de plataforma do banco."""
+    import os as _os
+    # Prioridade: banco -> variavel de ambiente -> fallback
     cfg = await db.platform_settings.find_one({"_id": "global"}, {"_id": 0, key: 1})
-    return (cfg or {}).get(key) or os.environ.get(key.upper(), fallback)
+    return (cfg or {}).get(key) or _os.environ.get(key.upper(), fallback)

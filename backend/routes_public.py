@@ -314,17 +314,19 @@ async def track_order(order_id: str):
 
 
 @router.post("/restaurants/{slug}/reviews")
-async def create_review(slug: str, payload: dict):
+async def submit_review(slug: str, payload: dict):
     r = await _get_restaurant_or_404(slug)
-    rating = int(payload.get("rating") or 0)
-    if rating < 1 or rating > 5:
-        raise HTTPException(status_code=400, detail="Nota deve ser entre 1 e 5")
+    rating = int(payload.get("rating", 5))
+    comment = (payload.get("comment") or "").strip()
+    customer_name = (payload.get("customer_name") or "Cliente").strip()
+    if not 1 <= rating <= 5:
+        raise HTTPException(400, "Rating deve ser entre 1 e 5")
     doc = {
         "id": new_id(),
         "restaurant_id": r["id"],
-        "name": payload.get("name") or "Cliente",
         "rating": rating,
-        "comment": payload.get("comment") or "",
+        "comment": comment,
+        "customer_name": customer_name,
         "created_at": now_iso(),
     }
     await db.reviews.insert_one(doc)
