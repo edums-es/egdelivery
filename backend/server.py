@@ -48,10 +48,15 @@ app.include_router(routes_advanced.router)
 app.include_router(routes_advanced.public_router)
 app.include_router(routes_billing.router)
 
+_origins = os.environ.get("CORS_ORIGINS", "").split(",")
+_origins = [o.strip() for o in _origins if o.strip()]
+if not _origins:
+    _origins = ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=os.environ.get("CORS_ORIGINS", "*").split(","),
+    allow_credentials=_origins != ["*"],
+    allow_origins=_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
