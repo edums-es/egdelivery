@@ -15,43 +15,43 @@ const NAV_GROUPS = [
   {
     label: "Operação",
     items: [
-      { to: "/admin",          label: "Dashboard",    icon: LayoutDashboard, end: true },
-      { to: "/admin/pdv",      label: "PDV",          icon: ShoppingCart },
-      { to: "/admin/caixa",    label: "Caixa",        icon: Wallet },
-      { to: "/admin/pedidos",  label: "Pedidos",      icon: ClipboardList },
-      { to: "/admin/mesas",    label: "Mesas / QR",   icon: QrCode },
+      { to: "/supermaster",          label: "Dashboard",    icon: LayoutDashboard, end: true },
+      { to: "/supermaster/pdv",      label: "PDV",          icon: ShoppingCart },
+      { to: "/supermaster/caixa",    label: "Caixa",        icon: Wallet },
+      { to: "/supermaster/pedidos",  label: "Pedidos",      icon: ClipboardList },
+      { to: "/supermaster/mesas",    label: "Mesas / QR",   icon: QrCode },
     ],
   },
   {
     label: "Cardápio",
     items: [
-      { to: "/admin/produtos",   label: "Produtos",    icon: UtensilsCrossed },
-      { to: "/admin/categorias", label: "Categorias",  icon: FolderTree },
-      { to: "/admin/combos",     label: "Combos",      icon: Layers },
-      { to: "/admin/banners",    label: "Banners",     icon: Image },
+      { to: "/supermaster/produtos",   label: "Produtos",    icon: UtensilsCrossed },
+      { to: "/supermaster/categorias", label: "Categorias",  icon: FolderTree },
+      { to: "/supermaster/combos",     label: "Combos",      icon: Layers },
+      { to: "/supermaster/banners",    label: "Banners",     icon: Image },
     ],
   },
   {
     label: "Estoque",
     items: [
-      { to: "/admin/estoque",      label: "Estoque",      icon: PackageSearch },
-      { to: "/admin/fornecedores", label: "Fornecedores", icon: Truck },
+      { to: "/supermaster/estoque",      label: "Estoque",      icon: PackageSearch },
+      { to: "/supermaster/fornecedores", label: "Fornecedores", icon: Truck },
     ],
   },
   {
     label: "Clientes",
     items: [
-      { to: "/admin/clientes",   label: "Clientes",    icon: Users },
-      { to: "/admin/fidelidade", label: "Fidelidade",  icon: Gift },
-      { to: "/admin/atacado",    label: "Atacado",     icon: Building2 },
-      { to: "/admin/cupons",     label: "Cupons",      icon: Ticket },
+      { to: "/supermaster/clientes",   label: "Clientes",    icon: Users },
+      { to: "/supermaster/fidelidade", label: "Fidelidade",  icon: Gift },
+      { to: "/supermaster/atacado",    label: "Atacado",     icon: Building2 },
+      { to: "/supermaster/cupons",     label: "Cupons",      icon: Ticket },
     ],
   },
   {
     label: "Gestão",
     items: [
-      { to: "/admin/relatorios",   label: "Relatórios",    icon: BarChart3 },
-      { to: "/admin/configuracoes", label: "Configurações", icon: Settings },
+      { to: "/supermaster/relatorios",   label: "Relatórios",    icon: BarChart3 },
+      { to: "/supermaster/configuracoes", label: "Configurações", icon: Settings },
     ],
   },
 ];

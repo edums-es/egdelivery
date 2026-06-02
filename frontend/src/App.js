@@ -40,7 +40,7 @@ function Protected({ children, roles }) {
   const { user } = useAuth();
   if (user === null) return <div className="min-h-screen grid place-items-center text-muted-foreground">Carregando...</div>;
   if (!user) return <Navigate to="/login" replace />;
-  if (roles && !roles.includes(user.role)) return <Navigate to={user.role === "super_admin" ? "/super" : "/admin"} replace />;
+  if (roles && !roles.includes(user.role)) return <Navigate to={user.role === "super_admin" ? "/super" : "/supermaster"} replace />;
   return children;
 }
 
@@ -55,7 +55,7 @@ function App() {
             <Route path="/loja/:slug" element={<ForceLightMode><MenuPage /></ForceLightMode>} />
             <Route path="/pedido/:order_id" element={<ForceLightMode><TrackOrder /></ForceLightMode>} />
 
-            <Route path="/admin" element={<Protected roles={["owner","manager","attendant","kitchen"]}><AdminLayout /></Protected>}>
+            <Route path="/supermaster" element={<Protected roles={["owner","manager","attendant","kitchen"]}><AdminLayout /></Protected>}>
               <Route index element={<Dashboard />} />
               <Route path="pdv" element={<PDV />} />
               <Route path="caixa" element={<CashRegister />} />

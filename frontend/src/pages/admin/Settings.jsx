@@ -40,7 +40,7 @@ export default function Settings() {
         accepts_delivery: r.accepts_delivery, accepts_pickup: r.accepts_pickup,
         delivery_fee_mode: r.delivery_fee_mode, flat_delivery_fee: Number(r.flat_delivery_fee) || 0,
         delivery_zones: r.delivery_zones, payment_methods: r.payment_methods,
-        pix_key: r.pix_key, pix_name: r.pix_name, opening_hours: r.opening_hours,
+        pix_key: r.pix_key, pix_name: r.pix_name, openpix_app_id: r.openpix_app_id, opening_hours: r.opening_hours,
       };
       await api.put("/admin/restaurant", payload);
       toast.success("Configurações salvas");
@@ -308,6 +308,13 @@ export default function Settings() {
                 <Label className="dark:text-gray-200">Nome do recebedor</Label>
                 <Input value={r.pix_name || ""} onChange={(e) => set({ pix_name: e.target.value })}
                   className="mt-1 dark:bg-gray-800 dark:border-gray-600 dark:text-white" />
+              </div>
+              <div className="col-span-2">
+                <Label className="dark:text-gray-200">OpenPix App ID</Label>
+                <Input value={r.openpix_app_id || ""} onChange={(e) => set({ openpix_app_id: e.target.value })}
+                  placeholder="Cole o App ID do OpenPix aqui"
+                  className="mt-1 dark:bg-gray-800 dark:border-gray-600 dark:text-white" />
+                <p className="text-xs text-gray-400 mt-1">Gera QR Code Pix automático no checkout. Obtenha em <a href="https://app.openpix.com.br" target="_blank" rel="noreferrer" className="underline">app.openpix.com.br</a></p>
               </div>
             </div>
           )}

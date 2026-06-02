@@ -158,18 +158,24 @@ function MenuContent({ data, slug }) {
         <>
           {/* Banners */}
           {banners.length > 0 && (
-            <div className="px-4 mt-4 flex gap-3 overflow-x-auto scrollbar-hide snap-x">
+            <div className="px-4 mt-4 flex gap-3 overflow-x-auto scrollbar-hide snap-x snap-mandatory">
               {banners.map(b => {
                 const linked = b.product_id ? products.find(p => p.id === b.product_id) : null;
+                const hasText = b.title || b.subtitle;
                 return (
                   <div key={b.id} onClick={() => linked && setSelectedProduct(linked)}
-                    className={`relative min-w-[88%] h-40 rounded-2xl overflow-hidden snap-start border border-white/10 ${linked ? "cursor-pointer" : ""}`}>
-                    {b.image_url && <img src={b.image_url} alt={b.title} className="w-full h-full object-cover"/>}
-                    <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent p-4 flex flex-col justify-end">
-                      <p className="text-white font-display font-bold text-lg leading-tight">{b.title}</p>
-                      {b.subtitle && <p className="text-white/70 text-xs mt-0.5">{b.subtitle}</p>}
-                      {linked && <span className="mt-2 text-xs font-bold px-2 py-0.5 rounded-full w-fit" style={{background:accent,color:hexFg(accent)}}>Ver produto →</span>}
-                    </div>
+                    className={`relative shrink-0 w-[88%] rounded-2xl overflow-hidden snap-start border border-white/10 ${linked ? "cursor-pointer" : ""}`}
+                    style={{aspectRatio:"16/7"}}>
+                    {b.image_url
+                      ? <img src={b.image_url} alt={b.title || ""} className="w-full h-full object-cover object-center"/>
+                      : <div className="w-full h-full bg-[#1A1A1A]"/>}
+                    {hasText && (
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent p-4 flex flex-col justify-end">
+                        {b.title && <p className="text-white font-display font-bold text-base leading-tight drop-shadow">{b.title}</p>}
+                        {b.subtitle && <p className="text-white/80 text-xs mt-0.5 drop-shadow">{b.subtitle}</p>}
+                        {linked && <span className="mt-2 text-xs font-bold px-2 py-0.5 rounded-full w-fit" style={{background:accent,color:hexFg(accent)}}>Ver produto →</span>}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -321,6 +327,17 @@ function MenuContent({ data, slug }) {
 
       <ProductDrawer product={selectedProduct} open={!!selectedProduct} onOpenChange={o => !o && setSelectedProduct(null)} onAdd={addItem}/>
       <CartSheet open={cartOpen} onOpenChange={setCartOpen} restaurant={restaurant} slug={slug}/>
+
+      {/* Easy Growth footer */}
+      <div style={{textAlign:"center",padding:"16px 0 24px",borderTop:"1px solid #1a1a1a",marginTop:8}}>
+        <a href="https://www.instagram.com/easygrowtth/" target="_blank" rel="noreferrer"
+          style={{display:"inline-flex",alignItems:"center",gap:6,textDecoration:"none",opacity:.5,transition:"opacity .2s"}}
+          onMouseEnter={e=>e.currentTarget.style.opacity="1"}
+          onMouseLeave={e=>e.currentTarget.style.opacity=".5"}>
+          <img src="/logoeg.png" alt="Easy Growth" style={{height:16,width:"auto",filter:"brightness(0) invert(1)"}}/>
+          <span style={{color:"#888",fontSize:11,fontFamily:"Manrope,sans-serif"}}>Desenvolvido pela Easy Growth</span>
+        </a>
+      </div>
     </div>
   );
 }

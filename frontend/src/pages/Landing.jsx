@@ -92,7 +92,7 @@ export default function Landing(){
 
     {/* Buttons desktop: 160×44 + 16px + 180×44 */}
     <div className="nav-d" style={{display:"flex",alignItems:"center",gap:16}}>
-      <Link to={`/loja/${SLUG}`}>
+      <a href="https://www.marisco27.com.br/loja/cardapio" target="_blank" rel="noreferrer">
         <button style={{width:160,height:44,borderRadius:8,border:`1.5px solid ${G}`,
           background:"transparent",color:G,fontSize:14,fontWeight:600,fontFamily:"inherit",
           cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}
@@ -100,7 +100,7 @@ export default function Landing(){
           onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
           <ShoppingCart size={15}/>Fazer Pedido
         </button>
-      </Link>
+      </a>
       <button onClick={()=>go("atacado")}
         style={{width:180,height:44,borderRadius:8,border:"none",background:G,
           color:BK,fontSize:14,fontWeight:700,fontFamily:"inherit",cursor:"pointer",
@@ -130,12 +130,12 @@ export default function Landing(){
         </button>
       ))}
       <div style={{marginTop:16,display:"flex",flexDirection:"column",gap:12}}>
-        <Link to={`/loja/${SLUG}`} onClick={()=>setMo(false)}>
+        <a href="https://www.marisco27.com.br/loja/cardapio" target="_blank" rel="noreferrer" onClick={()=>setMo(false)}>
           <button style={{width:"100%",height:48,borderRadius:8,border:`1.5px solid ${G}`,
             background:"transparent",color:G,fontSize:14,fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
             Fazer Pedido
           </button>
-        </Link>
+        </a>
         <button onClick={()=>{go("atacado");setMo(false);}}
           style={{width:"100%",height:48,borderRadius:8,border:"none",
             background:G,color:BK,fontSize:14,fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
@@ -218,7 +218,7 @@ export default function Landing(){
 
       {/* Buttons */}
       <div className="hero-btns" style={{display:"flex",flexDirection:"row",gap:16,marginBottom:28}}>
-        <Link to={`/loja/${SLUG}`} className="hero-btn-wrap">
+        <a href="https://www.marisco27.com.br/loja/cardapio" className="hero-btn-wrap" target="_blank" rel="noreferrer">
           <button className="hero-btn" style={{width:190,height:54,borderRadius:8,border:"none",
             background:`linear-gradient(135deg,${G},${G2})`,
             color:BK,fontSize:15,fontWeight:700,fontFamily:"inherit",cursor:"pointer",
@@ -228,7 +228,7 @@ export default function Landing(){
             onMouseLeave={e=>e.currentTarget.style.transform="none"}>
             <ShoppingCart size={18}/>Fazer Pedido
           </button>
-        </Link>
+        </a>
         <button className="hero-btn hero-btn-out" onClick={()=>go("atacado")}
           style={{width:190,height:54,borderRadius:8,
             border:`2px solid ${G}55`,background:`${G}08`,
@@ -441,27 +441,23 @@ export default function Landing(){
       <p style={{color:G,fontSize:11,fontWeight:700,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:14}}>Navegação</p>
       {[...NAV,{l:"Ver Cardápio",id:null,href:`/loja/${SLUG}`}].map(l=>(
         <div key={l.l} style={{marginBottom:8}}>
-          {l.href?<Link to={l.href} style={{color:"#555",fontSize:13,textDecoration:"none"}} onMouseEnter={e=>e.currentTarget.style.color=G} onMouseLeave={e=>e.currentTarget.style.color="#555"}>{l.l}</Link>
+          {l.href?<a href={l.href.startsWith("/loja") ? "https://www.marisco27.com.br/loja/cardapio" : l.href} target={l.href.startsWith("/loja") ? "_blank" : undefined} rel="noreferrer" style={{color:"#555",fontSize:13,textDecoration:"none"}} onMouseEnter={e=>e.currentTarget.style.color=G} onMouseLeave={e=>e.currentTarget.style.color="#555"}>{l.l}</a>
           :<button onClick={()=>go(l.id)} style={{...nb,color:"#555",fontSize:13}} onMouseEnter={e=>e.currentTarget.style.color=G} onMouseLeave={e=>e.currentTarget.style.color="#555"}>{l.l}</button>}
         </div>
       ))}
     </div>
-    <div>
-      <p style={{color:G,fontSize:11,fontWeight:700,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:14}}>Acesso</p>
-      <Link to="/login">
-        <button style={{padding:"10px 20px",borderRadius:8,border:`1.5px solid ${G}40`,
-          background:"transparent",color:G,fontSize:13,fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}
-          onMouseEnter={e=>e.currentTarget.style.background=`${G}12`}
-          onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-          Acessar Painel
-        </button>
-      </Link>
-    </div>
+
   </div>
   <div className="ct" style={{maxWidth:1280,margin:"0 auto",padding:"0 80px",boxSizing:"border-box"}}>
     <div style={{borderTop:`1px solid ${G}10`,paddingTop:18,display:"flex",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
       <span style={{color:"#333",fontSize:12}}>© {new Date().getFullYear()} Marisco 27 — Todos os direitos reservados</span>
-      <span style={{color:"#333",fontSize:12}}>Mariscos premium para seu negócio</span>
+      <a href="https://www.instagram.com/easygrowtth/" target="_blank" rel="noreferrer"
+        style={{display:"flex",alignItems:"center",gap:6,textDecoration:"none"}}
+        onMouseEnter={e=>e.currentTarget.style.opacity=".7"}
+        onMouseLeave={e=>e.currentTarget.style.opacity="1"}>
+        <img src="/logoeg.png" alt="Easy Growth" style={{height:18,width:"auto",filter:"brightness(0) invert(.4)"}}/>
+        <span style={{color:"#444",fontSize:11}}>Desenvolvido pela Easy Growth</span>
+      </a>
     </div>
   </div>
 </footer>

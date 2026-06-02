@@ -82,41 +82,80 @@ async def validate_coupon(slug: str, payload: dict):
 
 
 
-async def _notify_new_order(restaurant: dict, order: dict, order_in):
+async def _notify_new_order(restaurant: dict, order: dict, order_in, pix_via_openpix: bool = False):
     """Send WhatsApp to restaurant owner when new order arrives."""
+    import pytz
+    from datetime import datetime
     owner_phone = restaurant.get("whatsapp") or restaurant.get("phone")
     if not owner_phone:
         return
-    items_text = ""
+
+    # Date/time in Brazil timezone
+    try:
+        tz = pytz.timezone("America/Sao_Paulo")
+        now = datetime.now(tz)
+        dt_str = now.strftime("%d/%m/%Y %H:%M")
+    except Exception:
+        from datetime import datetime as dt
+        dt_str = dt.utcnow().strftime("%d/%m/%Y %H:%M") + " UTC"
+
+    # Items
+    items_lines = []
     for it in order_in.items:
-        items_text += f"\n  • {it.quantity}x {it.product_name} — {brl_fmt(it.total_price)}"
+        items_lines.append(f"  {it.quantity}x {it.product_name} — {brl_fmt(it.total_price)}")
         for op in (it.options or []):
-            items_text += f"\n    + {op.name}"
-    
-    delivery_type = "Entrega 🛵" if order_in.type == "delivery" else "Retirada 🏪"
-    address_text = ""
+            items_lines.append(f"    + {op.name}")
+    items_text = "\n".join(items_lines)
+
+    # Delivery type & address
+    delivery_type = "Entrega" if order_in.type == "delivery" else "Retirada"
+    address_lines = []
     if order_in.address and order_in.type == "delivery":
         a = order_in.address
-        address_text = f"\n📍 *Endereço:* {a.street}, {a.number}"
+        line = f"  {a.street}, {a.number}"
         if a.complement:
-            address_text += f" - {a.complement}"
-        address_text += f"\n   {a.neighborhood}"
+            line += f" ({a.complement})"
+        address_lines.append(line)
+        if a.neighborhood:
+            address_lines.append(f"  {a.neighborhood} — {getattr(a, 'city', '')} {getattr(a, 'state', '')}")
+    address_text = ("\n*Endereco:*\n" + "\n".join(address_lines)) if address_lines else ""
 
+    # Payment label
+    pm = (order_in.payment_method or "").strip()
+    pm_lower = pm.lower()
+    if pm_lower in ("pix", "pix automatico", "pix automático"):
+        if pix_via_openpix:
+            payment_label = "Pix (pago via OpenPix)"
+        else:
+            payment_label = "Pix (aguardando comprovante)"
+    elif pm_lower == "dinheiro":
+        payment_label = "Dinheiro"
+    elif pm_lower in ("cartao", "cartão", "cartao de credito", "cartão de crédito"):
+        payment_label = "Cartao de credito"
+    elif pm_lower in ("cartao de debito", "cartão de débito"):
+        payment_label = "Cartao de debito"
+    elif pm_lower == "vale refeicao" or pm_lower == "vale refeição":
+        payment_label = "Vale refeicao"
+    else:
+        payment_label = pm
+
+    sep = "--------------------"
     msg = (
-        f"🔔 *Novo pedido #{order['order_number']}!*\n"
-        f"━━━━━━━━━━━━━━━━━━\n"
-        f"👤 *Cliente:* {order_in.customer.name}\n"
-        f"📱 *Telefone:* {order_in.customer.phone}\n"
-        f"🏷️ *Tipo:* {delivery_type}"
+        f"*NOVO PEDIDO #{order['order_number']}*\n"
+        f"Data: {dt_str}\n"
+        f"{sep}\n"
+        f"*Cliente:* {order_in.customer.name}\n"
+        f"*Telefone:* {order_in.customer.phone}\n"
+        f"*Tipo:* {delivery_type}"
         f"{address_text}\n"
-        f"━━━━━━━━━━━━━━━━━━\n"
-        f"🛒 *Itens:*{items_text}\n"
-        f"━━━━━━━━━━━━━━━━━━\n"
-        f"💰 Subtotal: {brl_fmt(order_in.subtotal)}\n"
-        f"🛵 Entrega: {brl_fmt(order_in.delivery_fee)}\n"
-        f"💵 *TOTAL: {brl_fmt(order_in.total)}*\n"
-        f"💳 Pagamento: {order_in.payment_method}\n"
-        f"━━━━━━━━━━━━━━━━━━"
+        f"{sep}\n"
+        f"*Itens:*\n{items_text}\n"
+        f"{sep}\n"
+        f"Subtotal: {brl_fmt(order_in.subtotal)}\n"
+        f"Entrega: {brl_fmt(order_in.delivery_fee)}\n"
+        f"*TOTAL: {brl_fmt(order_in.total)}*\n"
+        f"*Pagamento:* {payment_label}\n"
+        f"{sep}"
     )
     await send_whatsapp(restaurant, owner_phone, msg)
 
@@ -154,7 +193,7 @@ async def create_order(slug: str, order: OrderIn):
 
     # Notify restaurant owner about new order
     import asyncio
-    asyncio.create_task(_notify_new_order(r, clean(doc), order))
+    # Notify after OpenPix check so we know if pix was automatic
 
     if order.coupon_code:
         await db.coupons.update_one(
@@ -220,6 +259,9 @@ async def create_order(slug: str, order: OrderIn):
                 )
         except Exception:
             pass  # OpenPix failure must never block order creation
+
+    # Notify owner — pass pix_via_openpix flag
+    asyncio.create_task(_notify_new_order(r, clean(doc), order, pix_via_openpix=bool(pix_charge)))
 
     result = clean(doc)
     if pix_charge:

@@ -33,7 +33,7 @@ export default function LoginPage() {
   const [rStore, setRStore]     = useState("");
 
   useEffect(() => {
-    if (user?.role) navigate(user.role === "super_admin" ? "/super" : "/admin", { replace: true });
+    if (user?.role) navigate(user.role === "super_admin" ? "/super" : "/supermaster", { replace: true });
   }, [user, navigate]);
 
   const handleLogin = async (e) => {
@@ -42,7 +42,7 @@ export default function LoginPage() {
     try {
       const u = await login(email, password);
       toast.success("Bem-vindo de volta!");
-      navigate(u.role === "super_admin" ? "/super" : "/admin", { replace: true });
+      navigate(u.role === "super_admin" ? "/super" : "/supermaster", { replace: true });
     } catch (err) {
       toast.error(formatApiError(err.response?.data?.detail) || "Falha no login");
     } finally { setLoading(false); }

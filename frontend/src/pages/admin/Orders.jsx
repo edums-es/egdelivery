@@ -310,7 +310,9 @@ export default function Orders() {
   const [view, setView] = useState("kanban"); // "kanban" | "list"
   const [collapsed, setCollapsed] = useState({});
   const prevPendingCount = useRef(0);
+  const prevCancelCount = useRef(-1);
   const audioRef = useRef(null);
+  const audioCancelRef = useRef(null);
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -318,13 +320,22 @@ export default function Orders() {
       const { data } = await api.get("/admin/orders");
       setOrders(data);
 
-      // Sound notification for new pending orders
+      // Novo pedido
       const pendingNow = data.filter((o) => o.status === "pending").length;
       if (pendingNow > prevPendingCount.current && prevPendingCount.current >= 0) {
-        toast.info(`🔔 ${pendingNow - prevPendingCount.current} novo(s) pedido(s)!`, { duration: 5000 });
-        try { audioRef.current?.play(); } catch {}
+        toast.info(`🔔 ${pendingNow - prevPendingCount.current} novo(s) pedido(s)!`, { duration: 6000 });
+        try { audioRef.current?.play().catch(() => {}); } catch {}
       }
       prevPendingCount.current = pendingNow;
+
+      // Pedido cancelado
+      const cancelNow = data.filter((o) => o.status === "cancelled").length;
+      if (prevCancelCount.current >= 0 && cancelNow > prevCancelCount.current) {
+        toast.warning(`❌ ${cancelNow - prevCancelCount.current} pedido(s) cancelado(s)`, { duration: 6000 });
+        try { audioCancelRef.current?.play().catch(() => {}); } catch {}
+      }
+      if (prevCancelCount.current < 0) prevCancelCount.current = cancelNow;
+      else prevCancelCount.current = cancelNow;
     } finally {
       if (!silent) setLoading(false);
     }
@@ -368,7 +379,8 @@ export default function Orders() {
   return (
     <div className="space-y-4" data-testid="admin-orders">
       {/* Hidden audio for notification */}
-      <audio ref={audioRef} src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAA..." preload="none" />
+      <audio ref={audioRef} src="/sounds/new-order.wav" preload="auto" />
+      <audio ref={audioCancelRef} src="/sounds/cancel-order.wav" preload="auto" />
 
       {/* Toolbar */}
       <div className="flex flex-wrap items-center justify-between gap-3">
