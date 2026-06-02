@@ -313,6 +313,19 @@ export default function Orders() {
   const prevCancelCount = useRef(-1);
   const audioRef = useRef(null);
   const audioCancelRef = useRef(null);
+  const [soundEnabled, setSoundEnabled] = useState(false);
+
+  // Unlock audio context on first user interaction
+  const enableSound = () => {
+    setSoundEnabled(true);
+    // Play silent buffer to unlock audio
+    [audioRef, audioCancelRef].forEach(ref => {
+      if (ref.current) {
+        ref.current.volume = 0;
+        ref.current.play().then(() => { ref.current.pause(); ref.current.currentTime = 0; ref.current.volume = 1; }).catch(() => {});
+      }
+    });
+  };
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -324,7 +337,7 @@ export default function Orders() {
       const pendingNow = data.filter((o) => o.status === "pending").length;
       if (pendingNow > prevPendingCount.current && prevPendingCount.current >= 0) {
         toast.info(`🔔 ${pendingNow - prevPendingCount.current} novo(s) pedido(s)!`, { duration: 6000 });
-        try { audioRef.current?.play().catch(() => {}); } catch {}
+        if (soundEnabled) try { audioRef.current.currentTime = 0; audioRef.current?.play().catch(() => {}); } catch {}
       }
       prevPendingCount.current = pendingNow;
 
@@ -332,7 +345,7 @@ export default function Orders() {
       const cancelNow = data.filter((o) => o.status === "cancelled").length;
       if (prevCancelCount.current >= 0 && cancelNow > prevCancelCount.current) {
         toast.warning(`❌ ${cancelNow - prevCancelCount.current} pedido(s) cancelado(s)`, { duration: 6000 });
-        try { audioCancelRef.current?.play().catch(() => {}); } catch {}
+        if (soundEnabled) try { audioCancelRef.current.currentTime = 0; audioCancelRef.current?.play().catch(() => {}); } catch {}
       }
       if (prevCancelCount.current < 0) prevCancelCount.current = cancelNow;
       else prevCancelCount.current = cancelNow;
@@ -381,6 +394,30 @@ export default function Orders() {
       {/* Hidden audio for notification */}
       <audio ref={audioRef} src="/sounds/new-order.wav" preload="auto" />
       <audio ref={audioCancelRef} src="/sounds/cancel-order.wav" preload="auto" />
+
+      {/* Sound unlock banner */}
+      {!soundEnabled && (
+        <div className="flex items-center justify-between bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl px-4 py-2.5">
+          <p className="text-sm text-amber-700 dark:text-amber-400 font-medium">
+            🔔 Ative o alerta sonoro para novos pedidos
+          </p>
+          <button onClick={enableSound}
+            className="text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded-lg transition-colors">
+            Ativar Som
+          </button>
+        </div>
+      )}
+      {soundEnabled && (
+        <div className="flex items-center justify-between bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-xl px-4 py-2.5">
+          <p className="text-sm text-green-700 dark:text-green-400 font-medium">
+            🔊 Alerta sonoro ativado — atualizando a cada 15s
+          </p>
+          <button onClick={() => setSoundEnabled(false)}
+            className="text-xs text-green-600 dark:text-green-400 hover:underline">
+            Desativar
+          </button>
+        </div>
+      )}
 
       {/* Toolbar */}
       <div className="flex flex-wrap items-center justify-between gap-3">

@@ -84,20 +84,15 @@ async def validate_coupon(slug: str, payload: dict):
 
 async def _notify_new_order(restaurant: dict, order: dict, order_in, pix_via_openpix: bool = False):
     """Send WhatsApp to restaurant owner when new order arrives."""
-    import pytz
-    from datetime import datetime
+    from datetime import datetime, timezone, timedelta
     owner_phone = restaurant.get("whatsapp") or restaurant.get("phone")
     if not owner_phone:
         return
 
-    # Date/time in Brazil timezone
-    try:
-        tz = pytz.timezone("America/Sao_Paulo")
-        now = datetime.now(tz)
-        dt_str = now.strftime("%d/%m/%Y %H:%M")
-    except Exception:
-        from datetime import datetime as dt
-        dt_str = dt.utcnow().strftime("%d/%m/%Y %H:%M") + " UTC"
+    # Date/time in Brazil timezone (UTC-3, sem dependência externa)
+    from datetime import datetime, timezone, timedelta
+    br_tz = timezone(timedelta(hours=-3))
+    dt_str = datetime.now(br_tz).strftime("%d/%m/%Y %H:%M")
 
     # Items
     items_lines = []
