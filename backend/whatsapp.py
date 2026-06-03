@@ -1,159 +1,109 @@
-"""Twilio WhatsApp integration — notifications + keyword chatbot."""
+"""
+WhatsApp multi-provider: Evolution API (self-hosted) ou Kirago (SaaS).
+O provider e escolhido pelo Super Admin em platform_settings.wa_provider.
+"""
 import os
+import re
 import logging
 import unicodedata
-import re
-from typing import Optional
+import httpx
 
-from fastapi import APIRouter, Request, Form, HTTPException
-from fastapi.responses import PlainTextResponse
-from twilio.rest import Client
-from twilio.base.exceptions import TwilioRestException
+from fastapi import APIRouter, Request
+from fastapi.responses import JSONResponse
 
 from db import db
 from models import now_iso
 
 logger = logging.getLogger(__name__)
-
 router = APIRouter(prefix="/api/whatsapp", tags=["whatsapp"])
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 
-def _get_client(restaurant: dict) -> Optional[Client]:
-    sid = restaurant.get("twilio_account_sid") or os.environ.get("TWILIO_ACCOUNT_SID")
-    token = restaurant.get("twilio_auth_token") or os.environ.get("TWILIO_AUTH_TOKEN")
-    if not sid or not token:
-        return None
-    return Client(sid, token)
+def _evo_url():
+    return os.environ.get("EVOLUTION_API_URL", "http://evolution-api:8080")
 
+def _evo_key():
+    return os.environ.get("EVOLUTION_API_KEY", "menudigital_evo_key")
 
-def _from_number(restaurant: dict) -> str:
-    return restaurant.get("twilio_whatsapp_number") or os.environ.get("TWILIO_WHATSAPP_NUMBER", "")
+def _instance_name(restaurant_id):
+    return re.sub(r"[^a-zA-Z0-9_]", "", restaurant_id)[:32]
 
+def _brl(value):
+    return "R$ {:,.2f}".format(float(value)).replace(",","X").replace(".",",").replace("X",".")
 
-def _normalize(text: str) -> str:
+def _normalize(text):
     nfkd = unicodedata.normalize("NFD", text.lower())
     return re.sub(r"[^\w\s]", "", "".join(c for c in nfkd if not unicodedata.combining(c)))
 
 
-def _brl(value: float) -> str:
-    return f"R$ {value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-
-
-# ---------------------------------------------------------------------------
-# Send helpers
-# ---------------------------------------------------------------------------
-
-async def _send_via_wa_service(restaurant: dict, to_phone: str, message: str) -> bool:
-    """Tenta enviar via whatsapp-service local (QR code). Retorna True se enviado."""
+async def _send_via_evolution(restaurant_id, phone, message):
+    instance = _instance_name(restaurant_id)
     try:
-        import httpx as _httpx
-        wa_url = os.environ.get("WA_SERVICE_URL", "http://whatsapp-service:3001")
-        async with _httpx.AsyncClient(timeout=5) as client:
+        async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.post(
-                f"{wa_url}/session/{restaurant['id']}/send",
-                json={"phone": to_phone, "message": message},
+                f"{_evo_url()}/message/sendText/{instance}",
+                headers={"apikey": _evo_key(), "Content-Type": "application/json"},
+                json={"number": phone, "text": message},
             )
-            if resp.status_code == 200 and resp.json().get("ok"):
-                logger.info(f"WA service: mensagem enviada para {to_phone}")
+            if resp.status_code in (200, 201):
+                logger.info(f"[WA/Evo] Enviado para {phone}")
                 return True
     except Exception as e:
-        logger.debug(f"WA service indisponível, tentando Twilio: {e}")
+        logger.error(f"[WA/Evo] Erro: {e}")
     return False
 
 
-async def send_whatsapp(restaurant: dict, to_phone: str, message: str) -> bool:
-    """
-    Envia mensagem WhatsApp ao cliente.
-    Prioridade: 1) whatsapp-service (QR code) → 2) Twilio (API paga)
-    """
-    # 1. Tenta serviço local QR
-    if await _send_via_wa_service(restaurant, to_phone, message):
-        return True
+async def _send_via_kirago(kirago_token, phone, message):
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(
+                "https://kirago.com.br/chat/send/text",
+                headers={"token": kirago_token, "Content-Type": "application/json"},
+                json={"Phone": phone, "Body": message},
+            )
+            if resp.status_code in (200, 201):
+                logger.info(f"[WA/Kira] Enviado para {phone}")
+                return True
+    except Exception as e:
+        logger.error(f"[WA/Kira] Erro: {e}")
+    return False
 
-    # 2. Fallback Twilio
-    client = _get_client(restaurant)
-    from_num = _from_number(restaurant)
-    if not client or not from_num:
-        logger.warning("Nenhum canal WhatsApp configurado (WA service off + Twilio sem config)")
-        return False
 
+async def send_whatsapp(restaurant, to_phone, message):
     raw = re.sub(r"\D", "", to_phone)
     if not raw.startswith("55"):
         raw = "55" + raw
-    to_wa = f"whatsapp:+{raw}"
-    from_wa = from_num if from_num.startswith("whatsapp:") else f"whatsapp:{from_num}"
+    from routes_superadmin import get_platform_setting
+    provider = (await get_platform_setting("wa_provider", "evolution")).lower()
+    if provider == "kirago":
+        token = restaurant.get("kirago_token", "")
+        if not token:
+            return False
+        return await _send_via_kirago(token, raw, message)
+    return await _send_via_evolution(restaurant["id"], raw, message)
 
-    try:
-        client.messages.create(body=message, from_=from_wa, to=to_wa)
-        logger.info(f"WhatsApp sent to {to_wa}")
-        return True
-    except TwilioRestException as e:
-        logger.error(f"Twilio error: {e}")
-        return False
-
-
-# ---------------------------------------------------------------------------
-# Order status notification messages
-# ---------------------------------------------------------------------------
 
 STATUS_MESSAGES = {
-    "accepted": (
-        "✅ *Pedido #{number} confirmado!*\n\n"
-        "Olá, {name}! Seu pedido foi aceito e já está sendo preparado com muito carinho. 🍽️\n\n"
-        "Acompanhe seu pedido em tempo real:\n"
-        "{tracking_url}\n\n"
-        "Assim que ficar pronto avisamos aqui!"
-    ),
-    "preparing": (
-        "👨‍🍳 *Pedido #{number} em preparo!*\n\n"
-        "Olá, {name}! Nossa equipe já está preparando seu pedido. Aguarde um pouquinho! 🔥"
-    ),
-    "ready": (
-        "🎉 *Pedido #{number} pronto!*\n\n"
-        "Olá, {name}! Seu pedido está pronto e logo chegará até você! 🛵"
-    ),
-    "out_for_delivery": (
-        "🛵 *Pedido #{number} saiu para entrega!*\n\n"
-        "Olá, {name}! Seu pedido está a caminho. Prepare-se para receber! 📦"
-    ),
-    "completed": (
-        "⭐ *Pedido #{number} entregue!*\n\n"
-        "Olá, {name}! Esperamos que tenha gostado. Sua avaliação é muito importante para nós!\n\n"
-        "Obrigado por pedir no *{restaurant}*! 💚"
-    ),
-    "cancelled": (
-        "❌ *Pedido #{number} cancelado.*\n\n"
-        "Olá, {name}. Infelizmente seu pedido foi cancelado. "
-        "Entre em contato conosco para mais informações. Pedimos desculpas pelo transtorno!"
-    ),
+    "accepted": "Pedido #{number} confirmado!\n\nOla, {name}! Seu pedido foi aceito.\n\nAcompanhe: {tracking_url}",
+    "preparing": "Pedido #{number} em preparo!\n\nOla, {name}! Sua comida ja esta sendo preparada.",
+    "ready": "Pedido #{number} pronto!\n\nOla, {name}! Seu pedido esta pronto!",
+    "out_for_delivery": "Pedido #{number} saiu para entrega!\n\nOla, {name}! Seu pedido esta a caminho.",
+    "completed": "Pedido #{number} entregue!\n\nOla, {name}! Obrigado por pedir no {restaurant}!",
+    "cancelled": "Pedido #{number} cancelado.\n\nOla, {name}. Pedido cancelado. Entre em contato conosco.",
 }
 
 
-async def notify_order_status(order: dict, new_status: str):
-    """Notifica cliente via WhatsApp quando status do pedido muda."""
+async def notify_order_status(order, new_status):
     if new_status not in STATUS_MESSAGES:
         return
     customer_phone = (order.get("customer") or {}).get("phone", "")
     if not customer_phone:
         return
-
     restaurant = await db.restaurants.find_one({"id": order["restaurant_id"]}, {"_id": 0})
     if not restaurant:
         return
-
-    # Respeita configuração de quais status notificam (padrão: todos)
     default_statuses = ["accepted", "preparing", "ready", "out_for_delivery", "completed", "cancelled"]
-    notify_statuses = restaurant.get("wa_notify_statuses", default_statuses)
-    if new_status not in notify_statuses:
-        logger.debug(f"Status {new_status} não notifica por WA (config do restaurante)")
+    if new_status not in restaurant.get("wa_notify_statuses", default_statuses):
         return
-
-    # Tenta enviar (WA service local → Twilio)
-    # Se nenhum canal configurado, entra mas send_whatsapp vai logar e retornar False
-
     public_url = os.environ.get("PUBLIC_URL", "http://localhost:3000")
     tracking_url = f"{public_url}/pedido/{order.get('id', '')}"
     msg = STATUS_MESSAGES[new_status].format(
@@ -165,159 +115,83 @@ async def notify_order_status(order: dict, new_status: str):
     await send_whatsapp(restaurant, customer_phone, msg)
 
 
-# ---------------------------------------------------------------------------
-# Keyword chatbot
-# ---------------------------------------------------------------------------
+@router.post("/webhook/{restaurant_id}")
+async def whatsapp_webhook(restaurant_id, request: Request):
+    try:
+        payload = await request.json()
+    except Exception:
+        return JSONResponse({"ok": False})
 
-def _build_response(text: str, restaurant: dict) -> str:
-    q = _normalize(text)
+    event = payload.get("event", "")
+    data = payload.get("data", {})
+    messages = []
 
-    # Saudações
-    if re.search(r"\b(oi|ola|bom dia|boa tarde|boa noite|ola|hello|salve|ei)\b", q):
-        return (
-            f"Olá! 👋 Bem-vindo ao *{restaurant.get('name', '')}*!\n\n"
-            "Como posso te ajudar?\n\n"
-            "📍 *endereco* — nosso endereço\n"
-            "🕐 *horario* — horários de funcionamento\n"
-            "🛵 *entrega* — taxa e tempo de entrega\n"
-            "💳 *pagamento* — formas aceitas\n"
-            "🛒 *cardapio* — ver nosso cardápio\n"
-            "📞 *contato* — falar com atendente"
-        )
+    if event == "messages.upsert":
+        messages = data if isinstance(data, list) else [data]
+    elif payload.get("Type") == "Message":
+        info = payload.get("Info", {})
+        body = (payload.get("Text") or {}).get("Body", "")
+        sender = info.get("Sender", "")
+        if body and sender and not info.get("IsFromMe"):
+            messages = [{"_kirago": True, "phone": sender, "body": body}]
 
-    # Localização / endereço
-    if re.search(r"\b(enderec|localizac|onde|fica|local|bairro|rua|avenida|av|cep|cidade)\b", q):
-        parts = [
-            restaurant.get("address"),
-            restaurant.get("neighborhood"),
-            restaurant.get("city"),
-            restaurant.get("state"),
-        ]
-        parts = [p for p in parts if p]
-        if parts:
-            return f"📍 *Endereço:*\n{', '.join(parts)}"
-        return "Endereço ainda não cadastrado. Ligue para confirmar!"
-
-    # Horários
-    if re.search(r"\b(horario|hora|abre|fecha|funciona|funcionamento|atende|expediente|hoje)\b", q):
-        hours = restaurant.get("opening_hours") or {}
-        day_map = {"mon": "Segunda", "tue": "Terça", "wed": "Quarta",
-                   "thu": "Quinta", "fri": "Sexta", "sat": "Sábado", "sun": "Domingo"}
-        lines = []
-        for k, label in day_map.items():
-            h = hours.get(k, {})
-            if h.get("open"):
-                lines.append(f"  {label}: {h.get('start', '')}–{h.get('end', '')}")
-        if lines:
-            return "🕐 *Horários de funcionamento:*\n" + "\n".join(lines)
-        return "Horários ainda não cadastrados. Entre em contato para confirmar!"
-
-    # Status aberto agora
-    if re.search(r"\b(aberto|abriu|aberta|funcionando|agora|aberto agora)\b", q):
-        is_open = restaurant.get("is_open", False)
-        if is_open:
-            return "✅ Sim! Estamos *abertos* agora. Faça seu pedido pelo link do cardápio! 🍽️"
-        return "❌ No momento estamos *fechados*. Veja nossos horários respondendo *horario*."
-
-    # Entrega / frete / delivery
-    if re.search(r"\b(entrega|delivery|frete|taxa|entreg|motoboy|tempo)\b", q):
-        parts = []
-        fee = restaurant.get("flat_delivery_fee")
-        if fee is not None:
-            parts.append(f"Taxa de entrega: {'grátis! 🎉' if fee == 0 else _brl(fee)}")
-        eta = restaurant.get("average_delivery_time")
-        if eta:
-            parts.append(f"Tempo estimado: {eta}")
-        if parts:
-            return "🛵 *Informações de entrega:*\n" + "\n".join(f"  • {p}" for p in parts)
-        return "Entre em contato para saber sobre nossa taxa de entrega!"
-
-    # Pedido mínimo
-    if re.search(r"\b(minimo|pedido minimo|valor minimo)\b", q):
-        min_order = restaurant.get("minimum_order")
-        if min_order:
-            return f"🛒 Pedido mínimo: *{_brl(min_order)}*"
-        return "Não temos valor mínimo de pedido! 🎉"
-
-    # Pagamento
-    if re.search(r"\b(pagamento|pagar|pix|cartao|dinheiro|credito|debito|forma|aceita)\b", q):
-        methods = restaurant.get("payment_methods") or []
-        pix_key = restaurant.get("pix_key")
-        text_out = "💳 *Formas de pagamento:*\n"
-        if methods:
-            text_out += "\n".join(f"  • {m}" for m in methods)
-        else:
-            text_out += "  • Pix, Cartão de crédito/débito, Dinheiro"
-        if pix_key:
-            text_out += f"\n\n🔑 *Chave Pix:* `{pix_key}`"
-        return text_out
-
-    # Cardápio
-    if re.search(r"\b(cardapio|menu|produto|prato|item|lanche|comida|bebida|preco|valor)\b", q):
-        slug = restaurant.get("slug", "")
-        backend_url = os.environ.get("PUBLIC_URL", "http://localhost:3000")
-        link = f"{backend_url}/loja/{slug}" if slug else "nosso cardápio online"
-        return f"🍽️ *Nosso cardápio:*\n{link}\n\nAcesse e faça seu pedido!"
-
-    # Contato / atendente
-    if re.search(r"\b(contato|atendente|falar|humano|pessoa|ajuda|suporte|numero|telefone)\b", q):
-        phone = restaurant.get("phone") or restaurant.get("whatsapp")
-        if phone:
-            return f"📞 *Fale com a gente:*\n{phone}\n\nOu responda aqui mesmo!"
-        return "Entre em contato pelo nosso número principal ou visite nossa loja!"
-
-    # Obrigado
-    if re.search(r"\b(obrigad|valeu|brigad|agradec|thanks)\b", q):
-        return f"😊 Por nada! Fico feliz em ajudar. Bom apetite! 🍽️"
-
-    # Fallback
-    return (
-        f"Não entendi muito bem, mas estou aqui para ajudar! 😊\n\n"
-        "Tente perguntar sobre:\n"
-        "📍 *endereco* · 🕐 *horario* · 🛵 *entrega*\n"
-        "💳 *pagamento* · 🛒 *cardapio* · 📞 *contato*"
-    )
-
-
-# ---------------------------------------------------------------------------
-# Webhook — Twilio sends incoming WhatsApp messages here
-# ---------------------------------------------------------------------------
-
-@router.post("/webhook/{restaurant_id}", response_class=PlainTextResponse)
-async def whatsapp_webhook(
-    restaurant_id: str,
-    request: Request,
-    Body: str = Form(default=""),
-    From: str = Form(default=""),
-):
-    """
-    Twilio webhook URL: POST /api/whatsapp/webhook/{restaurant_id}
-    Configure this in Twilio Console > Messaging > WhatsApp Sandbox Settings.
-    """
     restaurant = await db.restaurants.find_one({"id": restaurant_id}, {"_id": 0})
     if not restaurant:
-        raise HTTPException(status_code=404, detail="Restaurant not found")
+        return JSONResponse({"ok": True})
 
-    incoming = Body.strip()
-    sender = From  # e.g. "whatsapp:+5511999999999"
+    for msg_data in messages:
+        if msg_data.get("_kirago"):
+            phone = re.sub(r"[^0-9]", "", msg_data["phone"])
+            body = msg_data["body"]
+        else:
+            if (msg_data.get("key") or {}).get("fromMe"):
+                continue
+            body = (
+                (msg_data.get("message") or {}).get("conversation") or
+                ((msg_data.get("message") or {}).get("extendedTextMessage") or {}).get("text") or ""
+            )
+            phone = re.sub(r"[^0-9]", "", (msg_data.get("key") or {}).get("remoteJid", ""))
+        if not body or not phone:
+            continue
+        await db.whatsapp_logs.insert_one({
+            "restaurant_id": restaurant_id, "direction": "in",
+            "from": phone, "body": body, "created_at": now_iso(),
+        })
+        response = _chatbot(body, restaurant)
+        await send_whatsapp(restaurant, phone, response)
 
-    # Log incoming
-    logger.info(f"[WA] From={sender} | msg={incoming!r}")
+    return JSONResponse({"ok": True})
 
-    # Store message log (optional, for analytics)
-    await db.whatsapp_logs.insert_one({
-        "restaurant_id": restaurant_id,
-        "direction": "in",
-        "from": sender,
-        "body": incoming,
-        "created_at": now_iso(),
-    })
 
-    response_text = _build_response(incoming, restaurant)
-
-    # Reply using Twilio TwiML (Twilio reads this XML response)
-    twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-    <Message>{response_text}</Message>
-</Response>"""
-    return PlainTextResponse(content=twiml, media_type="application/xml")
+def _chatbot(text, restaurant):
+    q = _normalize(text)
+    if re.search(r"\b(oi|ola|bom dia|boa tarde|boa noite|hello|ei)\b", q):
+        return f"Ola! Bem-vindo ao {restaurant.get('name', '')}!\nComo posso te ajudar?\nendereco | horario | entrega | pagamento | cardapio"
+    if re.search(r"\b(enderec|onde|fica|bairro|rua)\b", q):
+        parts = [p for p in [restaurant.get("address"), restaurant.get("neighborhood"),
+                              restaurant.get("city"), restaurant.get("state")] if p]
+        return "Endereco: " + ", ".join(parts) if parts else "Endereco nao cadastrado."
+    if re.search(r"\b(horario|hora|abre|fecha|funciona)\b", q):
+        h = restaurant.get("opening_hours") or {}
+        dm = {"mon":"Seg","tue":"Ter","wed":"Qua","thu":"Qui","fri":"Sex","sat":"Sab","sun":"Dom"}
+        lines = [f"{lb}: {h[k]['start']}-{h[k]['end']}" for k, lb in dm.items() if h.get(k, {}).get("open")]
+        return "Horarios:\n" + "\n".join(lines) if lines else "Horarios nao cadastrados."
+    if re.search(r"\b(entrega|frete|taxa)\b", q):
+        fee = restaurant.get("flat_delivery_fee")
+        eta = restaurant.get("average_delivery_time")
+        parts = []
+        if fee is not None: parts.append("Taxa: " + ("gratis!" if fee == 0 else _brl(fee)))
+        if eta: parts.append("Tempo: " + str(eta))
+        return "Entrega:\n" + "\n".join(parts) if parts else "Consulte a taxa de entrega."
+    if re.search(r"\b(pagamento|pix|cartao|dinheiro)\b", q):
+        methods = restaurant.get("payment_methods") or ["Pix, Cartao, Dinheiro"]
+        out = "Pagamento:\n" + "\n".join("- " + m for m in methods)
+        if restaurant.get("pix_key"): out += f"\n\nChave Pix: {restaurant['pix_key']}"
+        return out
+    if re.search(r"\b(cardapio|menu|produto|lanche|comida)\b", q):
+        slug = restaurant.get("slug", "")
+        url = os.environ.get("PUBLIC_URL", "http://localhost:3000")
+        return f"Cardapio: {url}/loja/{slug}"
+    if re.search(r"\b(obrigad|valeu|brigad)\b", q):
+        return "Por nada! Bom apetite!"
+    return "Tente: endereco | horario | entrega | pagamento | cardapio"

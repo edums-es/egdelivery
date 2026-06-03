@@ -8,17 +8,30 @@ services:
     ports:
       - "27017:27017"
 
-  whatsapp-service:
-    build: ./whatsapp-service
-    container_name: mariscodelivery-whatsapp
+  evolution-api:
+    image: atendai/evolution-api:v2.2.3
+    container_name: mariscodelivery-evolution
     restart: unless-stopped
     environment:
-      PORT: 3001
-      SESSION_DIR: /app/sessions
+      SERVER_URL: "http://evolution-api:8080"
+      AUTHENTICATION_TYPE: apikey
+      AUTHENTICATION_API_KEY: "menudigital_evo_key"
+      LANGUAGE: "pt-BR"
+      # Sem banco externo — armazena instâncias em volume local
+      DATABASE_ENABLED: "false"
+      CACHE_REDIS_ENABLED: "false"
+      RABBITMQ_ENABLED: "false"
+      WEBHOOK_GLOBAL_ENABLED: "false"
+      DEL_INSTANCE: "false"
+      # Não armazena mensagens (privacidade)
+      STORE_MESSAGES: "false"
+      STORE_MESSAGE_UP: "false"
+      STORE_CONTACTS: "false"
+      STORE_CHATS: "false"
     volumes:
-      - wa_sessions:/app/sessions
+      - evolution_instances:/evolution/instances
     ports:
-      - "3001:3001"
+      - "8080:8080"
 
   backend:
     build: ./backend
@@ -26,14 +39,16 @@ services:
     restart: unless-stopped
     depends_on:
       - mongo
-      - whatsapp-service
+      - evolution-api
     environment:
       MONGO_URL: mongodb://mongo:27017
       DB_NAME: mariscodelivery
       JWT_SECRET: troque_por_uma_chave_forte_aqui
       UPLOAD_DIR: /app/uploads
       CORS_ORIGINS: "http://localhost:3000"
-      WA_SERVICE_URL: http://whatsapp-service:3001
+      EVOLUTION_API_URL: http://evolution-api:8080
+      EVOLUTION_API_KEY: menudigital_evo_key
+      BACKEND_URL: http://backend:8001
     volumes:
       - uploads_data:/app/uploads
     ports:
@@ -54,4 +69,4 @@ services:
 volumes:
   mongo_data:
   uploads_data:
-  wa_sessions:
+  evolution_instances:
