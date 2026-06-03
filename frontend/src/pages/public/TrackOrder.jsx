@@ -9,12 +9,12 @@ import {
 } from "lucide-react";
 
 const STEPS = [
-  { status: "pending",          label: "Pedido recebido",     icon: Clock,        desc: "Aguardando confirmação do restaurante" },
-  { status: "accepted",         label: "Pedido aceito",        icon: CheckCircle2, desc: "O restaurante confirmou seu pedido" },
-  { status: "preparing",        label: "Em preparo",           icon: ChefHat,      desc: "Sua comida está sendo preparada" },
-  { status: "ready",            label: "Pronto",               icon: Package,      desc: "Seu pedido está pronto" },
-  { status: "out_for_delivery", label: "Saiu para entrega",    icon: Bike,         desc: "Seu pedido está a caminho" },
-  { status: "completed",        label: "Entregue",             icon: Star,         desc: "Bom apetite! 😋" },
+  { status: "pending",          label: "Pedido recebido",     icon: Clock,        desc: "Aguardando confirmação do pedido" },
+  { status: "accepted",         label: "Pedido confirmado",   icon: CheckCircle2, desc: "Pedido confirmado com sucesso!" },
+  { status: "preparing",        label: "Em preparo",          icon: ChefHat,      desc: "Seu pedido está sendo preparado" },
+  { status: "ready",            label: "Pronto",              icon: Package,      desc: "Seu pedido está pronto!" },
+  { status: "out_for_delivery", label: "Saiu para entrega",   icon: Bike,         desc: "Seu pedido está a caminho" },
+  { status: "completed",        label: "Entregue",            icon: Star,         desc: "Bom apetite! 😋" },
 ];
 
 const STATUS_ORDER = STEPS.map((s) => s.status);
