@@ -258,14 +258,16 @@ async def create_order(slug: str, order: OrderIn):
                 })
 
     pix_charge = None
-    openpix_app_id = r.get("openpix_app_id", "")
-    if openpix_app_id and order.payment_method.lower() in ("pix", "pix automatico"):
+    openpix_app_id = (r.get("openpix_app_id") or "").strip()
+    if openpix_app_id and "pix" in order.payment_method.lower():
+        import logging as _pix_log
+        _logger = _pix_log.getLogger(__name__)
         try:
             import httpx as _httpx
-            async with _httpx.AsyncClient(timeout=10) as client:
+            async with _httpx.AsyncClient(timeout=15) as client:
                 resp = await client.post(
                     "https://api.openpix.com.br/api/v1/charge",
-                    headers={"Authorization": f"App {openpix_app_id}"},
+                    headers={"Authorization": f"App {openpix_app_id}", "Content-Type": "application/json"},
                     json={
                         "correlationID": doc["id"],
                         "value": int(round(order.total * 100)),
@@ -276,20 +278,29 @@ async def create_order(slug: str, order: OrderIn):
                         },
                     },
                 )
+            _logger.info(f"[OpenPix] status={resp.status_code} pedido={doc['id']}")
             if resp.status_code in (200, 201):
-                charge = resp.json().get("charge", {})
+                body = resp.json()
+                charge = body.get("charge") or body  # alguns retornos vem na raiz
+                qr_img = charge.get("qrCodeImage") or ""
+                # Remove prefixo data:image/... se a API ja retornou com ele
+                if qr_img.startswith("data:"):
+                    qr_img = qr_img.split(",", 1)[-1]
+                br_code = charge.get("brCode") or charge.get("pixKey") or ""
                 pix_charge = {
-                    "qr_code_image": charge.get("qrCodeImage"),
-                    "br_code": charge.get("brCode"),
-                    "correlation_id": charge.get("correlationID"),
-                    "status": charge.get("status"),
+                    "qr_code_image": qr_img,
+                    "br_code": br_code,
+                    "correlation_id": charge.get("correlationID") or doc["id"],
+                    "status": charge.get("status", "ACTIVE"),
                 }
                 await db.orders.update_one(
                     {"id": doc["id"]},
                     {"$set": {"pix_charge": pix_charge, "payment_status": "awaiting"}},
                 )
-        except Exception:
-            pass
+            else:
+                _logger.error(f"[OpenPix] erro {resp.status_code}: {resp.text[:300]}")
+        except Exception as _e:
+            _logger.error(f"[OpenPix] excecao: {_e}", exc_info=True)
 
     asyncio.create_task(_notify_new_order(r, clean(doc), order, pix_via_openpix=bool(pix_charge)))
 
@@ -367,7 +378,7 @@ async def track_by_phone(phone: str, slug: str = None):
             "items": o.get("items", []),
             "restaurant_name": r["name"] if r else "",
             "restaurant_slug": r["slug"] if r else "",
-            "payment_method": o.get("payment_method", ""),
+            "payment_method"            "payment_method": o.get("payment_method", ""),
         })
     return result
 

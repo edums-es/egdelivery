@@ -222,7 +222,11 @@ export default function CartSheet({ open, onOpenChange, restaurant, slug }) {
               <div className="flex justify-center">
                 <div className="bg-white rounded-2xl p-3 inline-block">
                   <img
-                    src={`data:image/png;base64,${pixCharge.qr_code_image}`}
+                    src={
+                      pixCharge.qr_code_image.startsWith("data:")
+                        ? pixCharge.qr_code_image
+                        : `data:image/png;base64,${pixCharge.qr_code_image}`
+                    }
                     alt="QR Code Pix"
                     className="w-52 h-52 block"
                   />
