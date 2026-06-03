@@ -22,6 +22,7 @@ export default function CartSheet({ open, onOpenChange, restaurant, slug }) {
   const [submitting, setSubmitting] = useState(false);
   const [pixCharge, setPixCharge] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [lastOrderNumber, setLastOrderNumber] = useState(null);
 
   // coupon
   const [couponInput, setCouponInput] = useState("");
@@ -153,13 +154,9 @@ export default function CartSheet({ open, onOpenChange, restaurant, slug }) {
       // Se veio QR Code Pix automático, mostra tela de pagamento
       if (data.pix_charge?.br_code) {
         setPixCharge(data.pix_charge);
+        setLastOrderNumber(data.order_number);
         setStep("pix");
         toast.success(`Pedido #${data.order_number} criado! Escaneie o QR Code para pagar.`);
-        // Envia também pelo WhatsApp se solicitado
-        if (viaWhatsapp && restaurant?.whatsapp) {
-          const msg = buildWhatsappMessage(data.order_number, true);
-          window.open(`https://wa.me/${restaurant.whatsapp}?text=${msg}`, "_blank");
-        }
         clearCart();
         return;
       }
@@ -261,12 +258,26 @@ export default function CartSheet({ open, onOpenChange, restaurant, slug }) {
               <p>📱 Abra seu banco → Pix → Ler QR Code ou Copia e Cola</p>
             </div>
 
-            <button
-              onClick={closePix}
-              className="w-full rounded-xl h-11 text-sm font-semibold text-gray-300 border border-white/10 hover:border-white/20 transition-colors"
-            >
-              Fechar
-            </button>
+            <div className="space-y-2">
+              {restaurant?.whatsapp && (
+                <button
+                  onClick={() => {
+                    const msg = buildWhatsappMessage(lastOrderNumber, true);
+                    window.open(`https://wa.me/${restaurant.whatsapp.replace(/\D/g,"")}?text=${msg}`, "_blank");
+                  }}
+                  className="w-full rounded-xl h-11 text-sm font-semibold flex items-center justify-center gap-2 transition-colors"
+                  style={{backgroundColor:"#25D366", color:"#fff"}}
+                >
+                  <MessageCircle className="w-4 h-4" /> Avisar pelo WhatsApp
+                </button>
+              )}
+              <button
+                onClick={closePix}
+                className="w-full rounded-xl h-11 text-sm font-semibold text-gray-300 border border-white/10 hover:border-white/20 transition-colors"
+              >
+                Fechar
+              </button>
+            </div>
           </div>
         ) : items.length === 0 ? (
           <div className="p-10 text-center text-gray-400">
@@ -380,10 +391,16 @@ export default function CartSheet({ open, onOpenChange, restaurant, slug }) {
             {payment === "Dinheiro" && (
               <div><Label>Troco para</Label><Input type="number" value={changeFor} onChange={(e) => setChangeFor(e.target.value)} placeholder="Ex: 100" data-testid="checkout-change" className="mt-1" /></div>
             )}
-            {payment === "Pix" && restaurant?.pix_key && (
+            {payment.toLowerCase().includes("pix") && !restaurant?.openpix_app_id && restaurant?.pix_key && (
               <div className="text-xs rounded-xl p-3" style={{background:"#1A1A1A",border:"1px solid rgba(255,255,255,0.1)",color:"#ccc"}}>
                 <p className="font-semibold">Chave Pix: {restaurant.pix_key}</p>
                 <p className="text-gray-500">{restaurant.pix_name}</p>
+              </div>
+            )}
+            {payment.toLowerCase().includes("pix") && restaurant?.openpix_app_id && (
+              <div className="text-xs rounded-xl p-3 flex items-center gap-2" style={{background:"rgba(74,222,128,0.07)",border:"1px solid rgba(74,222,128,0.2)",color:"#4ade80"}}>
+                <QrCode className="w-4 h-4 shrink-0"/>
+                <p>QR Code Pix será gerado automaticamente ao confirmar</p>
               </div>
             )}
 
@@ -397,12 +414,20 @@ export default function CartSheet({ open, onOpenChange, restaurant, slug }) {
             </div>
 
             <div className="space-y-2 pb-2">
-              <Button onClick={() => submit(true)} disabled={submitting} data-testid="submit-whatsapp"
-                className="w-full h-12 rounded-xl text-white" style={{ backgroundColor: "#25D366" }}>
-                <MessageCircle className="w-5 h-5 mr-1" /> Enviar pelo WhatsApp
-              </Button>
-              <Button onClick={() => submit(false)} disabled={submitting} variant="outline" data-testid="submit-internal"
-                className="w-full h-12 rounded-xl">Finalizar no painel</Button>
+              {payment.toLowerCase().includes("pix") && restaurant?.openpix_app_id ? (
+                <Button onClick={() => submit(false)} disabled={submitting} data-testid="submit-pix"
+                  className="w-full h-12 rounded-xl text-white flex items-center justify-center gap-2"
+                  style={{ background: "linear-gradient(135deg, #32BCAD, #1a9d8f)" }}>
+                  <QrCode className="w-5 h-5" />
+                  {submitting ? "Gerando QR Code..." : "Pagar com Pix"}
+                </Button>
+              ) : (
+                <Button onClick={() => submit(true)} disabled={submitting} data-testid="submit-whatsapp"
+                  className="w-full h-12 rounded-xl text-white" style={{ backgroundColor: "#25D366" }}>
+                  <MessageCircle className="w-5 h-5 mr-1" />
+                  {submitting ? "Enviando..." : "Enviar pelo WhatsApp"}
+                </Button>
+              )}
             </div>
           </div>
         )}
