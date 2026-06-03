@@ -106,9 +106,9 @@ export default function CartSheet({ open, onOpenChange, restaurant, slug }) {
     return true;
   };
 
-  const buildWhatsappMessage = (orderNumber) => {
+  const buildWhatsappMessage = (orderNumber, pixViaOpenpix = false) => {
     const lines = [];
-    lines.push(`*Novo pedido pelo cardápio digital* 🍔`);
+    lines.push(`*Novo pedido pelo cardapio digital*`);
     if (orderNumber) lines.push(`Pedido #${orderNumber}`);
     lines.push("");
     lines.push(`*Cliente:* ${name}`);
@@ -133,7 +133,12 @@ export default function CartSheet({ open, onOpenChange, restaurant, slug }) {
     if (discount > 0) lines.push(`*Desconto:* -${brl(discount)}`);
     lines.push(`*Total:* ${brl(total)}`);
     lines.push("");
-    lines.push(`*Pagamento:* ${payment}`);
+    const pm = payment.toLowerCase();
+    let paymentLabel = payment;
+    if (pm === "pix" || pm === "pix automatico" || pm === "pix automático") {
+      paymentLabel = pixViaOpenpix ? "Pix pago automatico Openpix" : "Pix aguardando comprovante";
+    }
+    lines.push(`*Pagamento:* ${paymentLabel}`);
     if (payment === "Dinheiro" && changeFor) lines.push(`*Troco para:* ${brl(parseFloat(changeFor))}`);
     if (orderNotes) lines.push(`*Observação:* ${orderNotes}`);
     return encodeURIComponent(lines.join("\n"));
@@ -152,7 +157,7 @@ export default function CartSheet({ open, onOpenChange, restaurant, slug }) {
         toast.success(`Pedido #${data.order_number} criado! Escaneie o QR Code para pagar.`);
         // Envia também pelo WhatsApp se solicitado
         if (viaWhatsapp && restaurant?.whatsapp) {
-          const msg = buildWhatsappMessage(data.order_number);
+          const msg = buildWhatsappMessage(data.order_number, true);
           window.open(`https://wa.me/${restaurant.whatsapp}?text=${msg}`, "_blank");
         }
         clearCart();
@@ -160,7 +165,7 @@ export default function CartSheet({ open, onOpenChange, restaurant, slug }) {
       }
 
       if (viaWhatsapp && restaurant?.whatsapp) {
-        const msg = buildWhatsappMessage(data.order_number);
+        const msg = buildWhatsappMessage(data.order_number, false);
         window.open(`https://wa.me/${restaurant.whatsapp}?text=${msg}`, "_blank");
       }
       toast.success(`Pedido #${data.order_number} enviado com sucesso!`);

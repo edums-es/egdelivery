@@ -132,7 +132,7 @@ async def _notify_new_order(restaurant: dict, order: dict, order_in, pix_via_ope
         pm = (order_in.payment_method or "").strip()
         pm_lower = pm.lower()
         if pm_lower in ("pix", "pix automatico", "pix automático"):
-            payment_label = "Pix (pago via OpenPix)" if pix_via_openpix else "Pix (aguardando comprovante)"
+            payment_label = "Pix pago automatico Openpix" if pix_via_openpix else "Pix aguardando comprovante"
         elif pm_lower == "dinheiro":
             payment_label = "Dinheiro"
         elif "credito" in pm_lower or "crédito" in pm_lower:
@@ -351,6 +351,74 @@ async def track_by_phone(phone: str, slug: str = None):
     if not raw:
         raise HTTPException(400, "Telefone invalido")
     # Busca pelos ultimos 8 digitos (sem DDD pais)
+    suffix = raw[-8:]
+
+    query = {"customer.phone": {"$regex": suffix}}
+    if slug:
+        r = await db.restaurants.find_one({"slug": slug}, {"id": 1, "_id": 0})
+        if r:
+            query["restaurant_id"] = r["id"]
+
+    orders = await db.orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(20)
+
+    result = []
+    for o in orders:
+        r = await db.restaurants.find_one({"id": o["restaurant_id"]}, {"name": 1, "slug": 1, "_id": 0})
+        result.append({
+            "id": o["id"],
+            "order_number": o["order_number"],
+            "status": o["status"],
+            "created_at": o.get("created_at"),
+            "total": o.get("total", 0),
+            "type": o.get("type", "delivery"),
+            "items": o.get("items", []),
+            "restaurant_name": r["name"] if r else "",
+            "restaurant_slug": r["slug"] if r else "",
+            "payment_method": o.get("payment_method", ""),
+        })
+    return result
+
+
+@router.post("/restaurants/{slug}/reviews")
+async def submit_review(slug: str, payload: dict):
+    r = await _get_restaurant_or_404(slug)
+    rating = int(payload.get("rating", 5))
+    comment = (payload.get("comment") or "").strip()
+    customer_name = (payload.get("customer_name") or "Cliente").strip()
+    if not 1 <= rating <= 5:
+        raise HTTPException(400, "Rating deve ser entre 1 e 5")
+    doc = {
+        "id": new_id(),
+        "restaurant_id": r["id"],
+        "rating": rating,
+        "comment": comment,
+        "customer_name": customer_name,
+        "created_at": now_iso(),
+    }
+    await db.reviews.insert_one(doc)
+    return clean(doc)
+y"),
+        "address": o.get("address"),
+        "payment_method": o.get("payment_method"),
+        "customer_notes": o.get("customer_notes"),
+        "restaurant": {
+            "name": r.get("name", "") if r else "",
+            "slug": r.get("slug", "") if r else "",
+            "logo_url": r.get("logo_url") if r else None,
+            "primary_color": r.get("primary_color", "#EF4444") if r else "#EF4444",
+            "phone": r.get("phone") if r else None,
+            "whatsapp": r.get("whatsapp") if r else None,
+        },
+    }
+
+
+@router.get("/track")
+async def track_by_phone(phone: str, slug: str = None):
+    """Retorna pedidos recentes de um cliente pelo telefone."""
+    import re as _re
+    raw = _re.sub(r"\D", "", phone)
+    if not raw:
+        raise HTTPException(400, "Telefone invalido")
     suffix = raw[-8:]
 
     query = {"customer.phone": {"$regex": suffix}}

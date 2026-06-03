@@ -94,36 +94,35 @@ async def send_whatsapp(restaurant, to_phone, message):
 
 STATUS_MESSAGES = {
     "accepted": (
-        "\u2705 *Pedido #{number} confirmado!*\n\n"
-        "Ol\u00e1, *{name}*! \ud83c\udf89 Seu pedido foi aceito e j\u00e1 est\u00e1 sendo preparado com muito carinho.\n\n"
-        "\ud83d\udcf2 Acompanhe o status em tempo real:\n{tracking_url}"
+        "✅ *Pedido #{number} confirmado!*\n\n"
+        "Olá, *{name}*! Seu pedido foi aceito e já está sendo preparado com muito carinho.\n\n"
+        "\U0001f4f2 Acompanhe o status em tempo real:\n{tracking_url}"
     ),
     "preparing": (
-        "\ud83d\udc68\u200d\ud83c\udf73 *Pedido #{number} em preparo!*\n\n"
-        "Ol\u00e1, *{name}*! Nossa equipe est\u00e1 com a m\u00e3o na massa preparando o seu pedido agora. \ud83d\udd25\n\n"
-        "\ud83d\udcf2 Acompanhe aqui:\n{tracking_url}"
+        "\U0001f468‍\U0001f373 *Pedido #{number} em preparo!*\n\n"
+        "Olá, *{name}*! Nossa equipe está com a mão na massa preparando o seu pedido agora.\n\n"
+        "\U0001f4f2 Acompanhe aqui:\n{tracking_url}"
     ),
     "ready": (
-        "\ud83c\udf89 *Pedido #{number} pronto!*\n\n"
-        "Ol\u00e1, *{name}*! Seu pedido ficou prontinho e est\u00e1 quentinho esperando por voc\u00ea! \ud83d\ude0b\n\n"
-        "\ud83d\udcf2 Acompanhe:\n{tracking_url}"
+        "\U0001f389 *Pedido #{number} pronto!*\n\n"
+        "Olá, *{name}*! Seu pedido ficou prontinho e está quentinho esperando por você!\n\n"
+        "\U0001f4f2 Acompanhe:\n{tracking_url}"
     ),
     "out_for_delivery": (
-        "\ud83d\udef5 *Pedido #{number} saiu para entrega!*\n\n"
-        "Ol\u00e1, *{name}*! Seu pedido est\u00e1 a caminho! \ud83c\udfe0\n"
-        "Em breve chegar\u00e1 at\u00e9 voc\u00ea. Fique de olho!\n\n"
-        "\ud83d\udcf2 Acompanhe em tempo real:\n{tracking_url}"
+        "\U0001f6f5 *Pedido #{number} saiu para entrega!*\n\n"
+        "Olá, *{name}*! Seu pedido está a caminho! Em breve chegará até você.\n\n"
+        "\U0001f4f2 Acompanhe em tempo real:\n{tracking_url}"
     ),
     "completed": (
-        "\u2b50 *Pedido #{number} entregue!*\n\n"
-        "Ol\u00e1, *{name}*! Esperamos que tenha gostado! \ud83d\udc9a\n"
-        "Foi um prazer atend\u00ea-lo(a). Obrigado por escolher o *{restaurant}*!\n\n"
-        "At\u00e9 o pr\u00f3ximo pedido! \ud83d\ude04"
+        "⭐ *Pedido #{number} entregue!*\n\n"
+        "Olá, *{name}*! Esperamos que tenha gostado!\n"
+        "Foi um prazer atendê-lo(a). Obrigado por escolher o *{restaurant}*!\n\n"
+        "Até o próximo pedido!"
     ),
     "cancelled": (
-        "\u274c *Pedido #{number} cancelado*\n\n"
-        "Ol\u00e1, *{name}*. Infelizmente seu pedido foi cancelado.\n\n"
-        "Entre em contato conosco para mais informa\u00e7\u00f5es. Pedimos desculpas pelo transtorno! \ud83d\ude4f"
+        "❌ *Pedido #{number} cancelado*\n\n"
+        "Olá, *{name}*. Infelizmente seu pedido foi cancelado.\n\n"
+        "Entre em contato conosco para mais informações. Pedimos desculpas pelo transtorno!"
     ),
 }
 
@@ -142,13 +141,16 @@ async def notify_order_status(order, new_status):
         return
     public_url = os.environ.get("PUBLIC_URL", "http://localhost:3000")
     tracking_url = f"{public_url}/pedido/{order.get('id', '')}"
-    msg = STATUS_MESSAGES[new_status].format(
-        number=order.get("order_number", ""),
-        name=(order.get("customer") or {}).get("name", "cliente"),
-        restaurant=restaurant.get("name", ""),
-        tracking_url=tracking_url,
-    )
-    await send_whatsapp(restaurant, customer_phone, msg)
+    try:
+        msg = STATUS_MESSAGES[new_status].format(
+            number=order.get("order_number", ""),
+            name=(order.get("customer") or {}).get("name", "cliente"),
+            restaurant=restaurant.get("name", ""),
+            tracking_url=tracking_url,
+        )
+        await send_whatsapp(restaurant, customer_phone, msg)
+    except Exception as e:
+        logger.error(f"[WA] Erro ao enviar status {new_status} para pedido {order.get('id')}: {e}")
 
 
 @router.post("/webhook/{restaurant_id}")
