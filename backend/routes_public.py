@@ -1,8 +1,9 @@
 """Public (customer-facing) menu endpoints — no auth required."""
-import random
+import logging
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import JSONResponse
 
 from db import db
 from whatsapp import send_whatsapp
@@ -10,11 +11,11 @@ from routes_ws import broadcast as ws_broadcast
 from models import OrderIn, clean, is_restaurant_open, new_id, now_iso
 
 router = APIRouter(prefix="/api/public", tags=["public"])
+logger = logging.getLogger(__name__)
 
 
 @router.get("/platform-config")
 async def public_platform_config():
-    """Retorna configuracoes publicas da plataforma (sem segredos)."""
     from routes_superadmin import get_platform_setting
     app_id = await get_platform_setting("onesignal_app_id", "")
     push_enabled = await get_platform_setting("push_notifications_enabled", "true")
@@ -102,26 +103,19 @@ def brl_fmt(value):
 
 
 async def _notify_new_order(restaurant: dict, order: dict, order_in, pix_via_openpix: bool = False):
-    """Envia WhatsApp ao dono do restaurante quando novo pedido chega."""
-    import logging as _log
-    _logger = _log.getLogger(__name__)
     try:
-        from datetime import datetime, timezone, timedelta
+        from datetime import timedelta
         owner_phone = restaurant.get("whatsapp") or restaurant.get("phone")
         if not owner_phone:
-            _logger.warning("_notify_new_order: sem telefone no restaurante")
             return
-
         br_tz = timezone(timedelta(hours=-3))
         dt_str = datetime.now(br_tz).strftime("%d/%m/%Y %H:%M")
-
         items_lines = []
         for it in order_in.items:
             items_lines.append(f"  {it.quantity}x {it.product_name} - {brl_fmt(it.total_price)}")
             for op in (it.options or []):
                 items_lines.append(f"    + {op.name}")
         items_text = "\n".join(items_lines)
-
         delivery_type = "Entrega" if order_in.type == "delivery" else "Retirada"
         address_lines = []
         if order_in.address and order_in.type == "delivery":
@@ -133,22 +127,20 @@ async def _notify_new_order(restaurant: dict, order: dict, order_in, pix_via_ope
             if a.neighborhood:
                 address_lines.append(f"  {a.neighborhood} - {getattr(a, 'city', '')} {getattr(a, 'state', '')}")
         address_text = ("\n*Endereco:*\n" + "\n".join(address_lines)) if address_lines else ""
-
         pm = (order_in.payment_method or "").strip()
         pm_lower = pm.lower()
-        if pm_lower in ("pix", "pix automatico", "pix automatico"):
+        if "pix" in pm_lower:
             payment_label = "Pix pago automatico Openpix" if pix_via_openpix else "Pix aguardando comprovante"
         elif pm_lower == "dinheiro":
             payment_label = "Dinheiro"
-        elif "credito" in pm_lower or "cr" in pm_lower:
+        elif "credito" in pm_lower or "credito" in pm_lower:
             payment_label = "Cartao de credito"
-        elif "debito" in pm_lower or "d" in pm_lower and "bito" in pm_lower:
+        elif "debito" in pm_lower:
             payment_label = "Cartao de debito"
         elif "vale" in pm_lower:
             payment_label = "Vale refeicao"
         else:
             payment_label = pm
-
         sep = "--------------------"
         msg = (
             f"*NOVO PEDIDO #{order['order_number']}*\n"
@@ -167,14 +159,12 @@ async def _notify_new_order(restaurant: dict, order: dict, order_in, pix_via_ope
             f"*Pagamento:* {payment_label}\n"
             f"{sep}"
         )
-        result = await send_whatsapp(restaurant, owner_phone, msg)
-        _logger.info(f"_notify_new_order: enviado={result} para {owner_phone}")
+        await send_whatsapp(restaurant, owner_phone, msg)
     except Exception as exc:
-        _logger.error(f"_notify_new_order falhou: {exc}", exc_info=True)
+        logger.error(f"_notify_new_order falhou: {exc}", exc_info=True)
 
 
 async def _push_onesignal(restaurant_id: str, order_number: int, title: str):
-    """Envia push via OneSignal."""
     import httpx as _httpx
     from routes_superadmin import get_platform_setting
     app_id = await get_platform_setting("onesignal_app_id")
@@ -260,14 +250,12 @@ async def create_order(slug: str, order: OrderIn):
     pix_charge = None
     openpix_app_id = (r.get("openpix_app_id") or "").strip()
     if openpix_app_id and "pix" in order.payment_method.lower():
-        import logging as _pix_log
-        _logger = _pix_log.getLogger(__name__)
         try:
             import httpx as _httpx
             async with _httpx.AsyncClient(timeout=15) as client:
                 resp = await client.post(
                     "https://api.openpix.com.br/api/v1/charge",
-                    headers={"Authorization": f"App {openpix_app_id}", "Content-Type": "application/json"},
+                    headers={"Authorization": openpix_app_id, "Content-Type": "application/json"},
                     json={
                         "correlationID": doc["id"],
                         "value": int(round(order.total * 100)),
@@ -278,29 +266,29 @@ async def create_order(slug: str, order: OrderIn):
                         },
                     },
                 )
-            _logger.info(f"[OpenPix] status={resp.status_code} pedido={doc['id']}")
+            logger.info(f"[OpenPix] status={resp.status_code} pedido={doc['id']} body={resp.text[:200]}")
             if resp.status_code in (200, 201):
                 body = resp.json()
-                charge = body.get("charge") or body  # alguns retornos vem na raiz
+                charge = body.get("charge") or body
                 qr_img = charge.get("qrCodeImage") or ""
-                # Remove prefixo data:image/... se a API ja retornou com ele
                 if qr_img.startswith("data:"):
                     qr_img = qr_img.split(",", 1)[-1]
-                br_code = charge.get("brCode") or charge.get("pixKey") or ""
-                pix_charge = {
-                    "qr_code_image": qr_img,
-                    "br_code": br_code,
-                    "correlation_id": charge.get("correlationID") or doc["id"],
-                    "status": charge.get("status", "ACTIVE"),
-                }
-                await db.orders.update_one(
-                    {"id": doc["id"]},
-                    {"$set": {"pix_charge": pix_charge, "payment_status": "awaiting"}},
-                )
+                br_code = charge.get("brCode") or charge.get("brcode") or ""
+                if br_code or qr_img:
+                    pix_charge = {
+                        "qr_code_image": qr_img,
+                        "br_code": br_code,
+                        "correlation_id": charge.get("correlationID") or doc["id"],
+                        "status": charge.get("status", "ACTIVE"),
+                    }
+                    await db.orders.update_one(
+                        {"id": doc["id"]},
+                        {"$set": {"pix_charge": pix_charge, "payment_status": "awaiting"}},
+                    )
             else:
-                _logger.error(f"[OpenPix] erro {resp.status_code}: {resp.text[:300]}")
+                logger.error(f"[OpenPix] erro {resp.status_code}: {resp.text[:300]}")
         except Exception as _e:
-            _logger.error(f"[OpenPix] excecao: {_e}", exc_info=True)
+            logger.error(f"[OpenPix] excecao: {_e}", exc_info=True)
 
     asyncio.create_task(_notify_new_order(r, clean(doc), order, pix_via_openpix=bool(pix_charge)))
 
@@ -308,6 +296,47 @@ async def create_order(slug: str, order: OrderIn):
     if pix_charge:
         result["pix_charge"] = pix_charge
     return result
+
+
+@router.post("/openpix/webhook")
+async def openpix_webhook(request: Request):
+    """Webhook chamado pela OpenPix/Woovi quando um Pix e pago."""
+    try:
+        payload = await request.json()
+    except Exception:
+        return JSONResponse({"ok": False}, status_code=400)
+
+    event = payload.get("event", "")
+    logger.info(f"[OpenPix Webhook] event={event}")
+
+    if event in ("OPENPIX:CHARGE_COMPLETED", "OPENPIX:TRANSACTION_CONFIRMED"):
+        charge = payload.get("charge") or payload.get("transaction") or {}
+        correlation_id = charge.get("correlationID") or charge.get("correlationId") or ""
+        if correlation_id:
+            order = await db.orders.find_one({"id": correlation_id}, {"_id": 0})
+            if order:
+                await db.orders.update_one(
+                    {"id": correlation_id},
+                    {"$set": {"payment_status": "paid", "updated_at": now_iso()}},
+                )
+                logger.info(f"[OpenPix Webhook] pedido {correlation_id} marcado como pago")
+                await ws_broadcast(
+                    order["restaurant_id"],
+                    "order_updated",
+                    {"id": order["id"], "status": order["status"], "payment_status": "paid"},
+                )
+                # Aceita o pedido automaticamente se ainda estiver pendente
+                if order.get("status") == "pending":
+                    await db.orders.update_one(
+                        {"id": correlation_id},
+                        {"$set": {"status": "accepted", "updated_at": now_iso()}},
+                    )
+                    from whatsapp import notify_order_status
+                    updated = await db.orders.find_one({"id": correlation_id}, {"_id": 0})
+                    if updated:
+                        await notify_order_status(updated, "accepted")
+
+    return JSONResponse({"ok": True})
 
 
 @router.get("/orders/{order_id}")
@@ -324,6 +353,7 @@ async def track_order(order_id: str):
         "id": o["id"],
         "order_number": o["order_number"],
         "status": o["status"],
+        "payment_status": o.get("payment_status", "pending"),
         "created_at": o.get("created_at"),
         "updated_at": o.get("updated_at"),
         "customer": customer,
@@ -350,21 +380,17 @@ async def track_order(order_id: str):
 
 @router.get("/track")
 async def track_by_phone(phone: str, slug: str = None):
-    """Retorna pedidos recentes de um cliente pelo telefone."""
     import re as _re
     raw = _re.sub(r"\D", "", phone)
     if not raw:
         raise HTTPException(400, "Telefone invalido")
     suffix = raw[-8:]
-
     query = {"customer.phone": {"$regex": suffix}}
     if slug:
         r = await db.restaurants.find_one({"slug": slug}, {"id": 1, "_id": 0})
         if r:
             query["restaurant_id"] = r["id"]
-
     orders = await db.orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(20)
-
     result = []
     for o in orders:
         r = await db.restaurants.find_one({"id": o["restaurant_id"]}, {"name": 1, "slug": 1, "_id": 0})
@@ -378,7 +404,7 @@ async def track_by_phone(phone: str, slug: str = None):
             "items": o.get("items", []),
             "restaurant_name": r["name"] if r else "",
             "restaurant_slug": r["slug"] if r else "",
-            "payment_method"            "payment_method": o.get("payment_method", ""),
+            "payment_method": o.get("payment_method", ""),
         })
     return result
 

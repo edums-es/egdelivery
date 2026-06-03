@@ -12,9 +12,31 @@ import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
 } from "@/components/ui/select";
 import ImageUpload from "@/components/admin/ImageUpload";
-import { Loader2, Plus, X, Save } from "lucide-react";
+import { Loader2, Plus, X, Save, Copy, Check } from "lucide-react";
+import { API } from "@/lib/api";
 
 const PAYMENT_OPTIONS = ["Pix", "Dinheiro", "Cartão de crédito", "Cartão de débito", "Vale refeição"];
+
+function WebhookUrlCopy({ url }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    });
+  };
+  return (
+    <div className="flex gap-2 items-center">
+      <code className="flex-1 text-xs bg-black/10 dark:bg-black/30 rounded px-2 py-1.5 truncate select-all dark:text-green-400 text-green-700">
+        {url}
+      </code>
+      <button onClick={copy} className="shrink-0 flex items-center gap-1 text-xs px-2 py-1.5 rounded border dark:border-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+        {copied ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
+        {copied ? "Copiado" : "Copiar"}
+      </button>
+    </div>
+  );
+}
 const uid = () => Math.random().toString(36).slice(2);
 
 /* shared panel class */
@@ -309,12 +331,29 @@ export default function Settings() {
                 <Input value={r.pix_name || ""} onChange={(e) => set({ pix_name: e.target.value })}
                   className="mt-1 dark:bg-gray-800 dark:border-gray-600 dark:text-white" />
               </div>
-              <div className="col-span-2">
-                <Label className="dark:text-gray-200">OpenPix App ID</Label>
-                <Input value={r.openpix_app_id || ""} onChange={(e) => set({ openpix_app_id: e.target.value })}
-                  placeholder="Cole o App ID do OpenPix aqui"
-                  className="mt-1 dark:bg-gray-800 dark:border-gray-600 dark:text-white" />
-                <p className="text-xs text-gray-400 mt-1">Gera QR Code Pix automático no checkout. Obtenha em <a href="https://app.openpix.com.br" target="_blank" rel="noreferrer" className="underline">app.openpix.com.br</a></p>
+              <div className="col-span-2 space-y-3">
+                <div>
+                  <Label className="dark:text-gray-200">OpenPix / Woovi — App ID</Label>
+                  <Input value={r.openpix_app_id || ""} onChange={(e) => set({ openpix_app_id: e.target.value })}
+                    placeholder="Cole o App ID (Authorization) do OpenPix aqui"
+                    className="mt-1 dark:bg-gray-800 dark:border-gray-600 dark:text-white" />
+                  <p className="text-xs text-gray-400 mt-1">
+                    Gera QR Code Pix automático no checkout. Obtenha em{" "}
+                    <a href="https://app.openpix.com.br/home/applications" target="_blank" rel="noreferrer" className="underline">
+                      app.openpix.com.br → API/Plugins → Criar Aplicação
+                    </a>
+                    {" "}— copie o campo <strong>AppID</strong>.
+                  </p>
+                </div>
+                {r.openpix_app_id && (
+                  <div className="rounded-xl p-3 space-y-2 dark:bg-gray-800 bg-gray-50 border dark:border-gray-700">
+                    <p className="text-xs font-semibold dark:text-gray-300">Webhook para confirmação automática de pagamento</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      Configure este URL no painel OpenPix em <strong>API/Plugins → Webhooks → Adicionar</strong>:
+                    </p>
+                    <WebhookUrlCopy url={`${API}/public/openpix/webhook`} />
+                  </div>
+                )}
               </div>
             </div>
           )}

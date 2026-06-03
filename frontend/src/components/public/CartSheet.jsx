@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle,
@@ -23,6 +23,9 @@ export default function CartSheet({ open, onOpenChange, restaurant, slug }) {
   const [pixCharge, setPixCharge] = useState(null);
   const [copied, setCopied] = useState(false);
   const [lastOrderNumber, setLastOrderNumber] = useState(null);
+  const [lastOrderId, setLastOrderId] = useState(null);
+  const [pixPaid, setPixPaid] = useState(false);
+  const pollRef = useRef(null);
 
   // coupon
   const [couponInput, setCouponInput] = useState("");
@@ -56,6 +59,22 @@ export default function CartSheet({ open, onOpenChange, restaurant, slug }) {
 
   const discount = coupon?.discount || 0;
   const total = Math.max(0, subtotal + deliveryFee - discount);
+
+  // Polling: verifica a cada 3s se pagamento Pix foi confirmado
+  useEffect(() => {
+    if (step !== "pix" || !lastOrderId || pixPaid) return;
+    pollRef.current = setInterval(async () => {
+      try {
+        const { data } = await api.get(`/public/orders/${lastOrderId}`);
+        if (data.payment_status === "paid") {
+          setPixPaid(true);
+          clearInterval(pollRef.current);
+          toast.success("Pagamento Pix confirmado!");
+        }
+      } catch { /* silencioso */ }
+    }, 3000);
+    return () => clearInterval(pollRef.current);
+  }, [step, lastOrderId, pixPaid]);
 
   const applyCoupon = async () => {
     if (!couponInput.trim()) return;
@@ -151,14 +170,24 @@ export default function CartSheet({ open, onOpenChange, restaurant, slug }) {
     try {
       const { data } = await api.post(`/public/restaurants/${slug}/orders`, buildOrderPayload());
 
-      // Se veio QR Code Pix automático, mostra tela de pagamento
-      if (data.pix_charge?.br_code) {
+      const isPix = payment.toLowerCase().includes("pix") && restaurant?.openpix_app_id;
+
+      // QR Code gerado com sucesso
+      if (data.pix_charge?.br_code || data.pix_charge?.qr_code_image) {
         setPixCharge(data.pix_charge);
         setLastOrderNumber(data.order_number);
+        setLastOrderId(data.id);
+        setPixPaid(false);
         setStep("pix");
-        toast.success(`Pedido #${data.order_number} criado! Escaneie o QR Code para pagar.`);
+        toast.success(`Pedido #${data.order_number} criado! Escaneie o QR Code.`);
         clearCart();
         return;
+      }
+
+      // OpenPix configurado mas falhou em gerar QR
+      if (isPix && !data.pix_charge) {
+        toast.error("Erro ao gerar QR Code Pix. Verifique o App ID do OpenPix nas configurações.");
+        return; // NÃO fecha a tela, pedido foi criado mas sem QR
       }
 
       if (viaWhatsapp && restaurant?.whatsapp) {
@@ -186,7 +215,11 @@ export default function CartSheet({ open, onOpenChange, restaurant, slug }) {
   };
 
   const closePix = () => {
+    clearInterval(pollRef.current);
     setPixCharge(null);
+    setPixPaid(false);
+    setLastOrderId(null);
+    setLastOrderNumber(null);
     setStep("cart");
     onOpenChange(false);
   };
@@ -208,11 +241,19 @@ export default function CartSheet({ open, onOpenChange, restaurant, slug }) {
         {step === "pix" && pixCharge ? (
           /* ── Tela de pagamento Pix automático ── */
           <div className="p-6 space-y-5 text-center">
-            <div className="flex items-center justify-center gap-2 mb-2">
-              <QrCode className="w-5 h-5 text-green-400"/>
-              <p className="text-sm text-green-400 font-semibold">Pix gerado com sucesso!</p>
-            </div>
-            <p className="text-xs text-gray-400">Escaneie o QR Code abaixo com seu app bancário ou copie o código Pix</p>
+            {pixPaid ? (
+              <div className="rounded-2xl p-5 space-y-2" style={{background:"rgba(74,222,128,0.1)",border:"1px solid rgba(74,222,128,0.3)"}}>
+                <p className="text-3xl">✅</p>
+                <p className="text-green-400 font-bold text-lg">Pagamento confirmado!</p>
+                <p className="text-xs text-green-300">Pedido #{lastOrderNumber} pago com sucesso.</p>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center gap-2 mb-2">
+                <QrCode className="w-5 h-5 text-green-400"/>
+                <p className="text-sm text-green-400 font-semibold">QR Code Pix gerado!</p>
+              </div>
+            )}
+            {!pixPaid && <p className="text-xs text-gray-400">Escaneie o QR Code abaixo com seu app bancário ou copie o código Pix</p>}
 
             {/* QR Code image */}
             {pixCharge.qr_code_image && (
