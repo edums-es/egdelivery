@@ -60,19 +60,19 @@ export default function CartSheet({ open, onOpenChange, restaurant, slug }) {
   const discount = coupon?.discount || 0;
   const total = Math.max(0, subtotal + deliveryFee - discount);
 
-  // Polling: verifica a cada 3s se pagamento Pix foi confirmado
+  // Polling: verifica a cada 4s se Pix foi pago (usa endpoint ativo que consulta OpenPix)
   useEffect(() => {
     if (step !== "pix" || !lastOrderId || pixPaid) return;
     pollRef.current = setInterval(async () => {
       try {
-        const { data } = await api.get(`/public/orders/${lastOrderId}`);
+        const { data } = await api.get(`/public/orders/${lastOrderId}/check-pix`);
         if (data.payment_status === "paid") {
           setPixPaid(true);
           clearInterval(pollRef.current);
-          toast.success("Pagamento Pix confirmado!");
+          toast.success("Pagamento Pix confirmado! 🎉");
         }
       } catch { /* silencioso */ }
-    }, 3000);
+    }, 4000);
     return () => clearInterval(pollRef.current);
   }, [step, lastOrderId, pixPaid]);
 

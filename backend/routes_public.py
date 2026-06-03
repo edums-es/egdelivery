@@ -436,6 +436,69 @@ async def track_order(order_id: str):
     }
 
 
+
+@router.get("/orders/{order_id}/check-pix")
+async def check_pix_payment(order_id: str):
+    """Verifica ativamente na OpenPix se o pagamento foi feito (fallback sem webhook)."""
+    o = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not o:
+        raise HTTPException(status_code=404, detail="Pedido nao encontrado")
+
+    payment_status = o.get("payment_status", "pending")
+    if payment_status == "paid":
+        return {"payment_status": "paid", "order_status": o.get("status")}
+
+    pix_charge = o.get("pix_charge")
+    if not pix_charge:
+        return {"payment_status": payment_status, "order_status": o.get("status")}
+
+    restaurant = await db.restaurants.find_one({"id": o["restaurant_id"]}, {"_id": 0})
+    openpix_app_id = (restaurant.get("openpix_app_id") or "").strip() if restaurant else ""
+    if not openpix_app_id:
+        return {"payment_status": payment_status, "order_status": o.get("status")}
+
+    correlation_id = pix_charge.get("correlation_id") or order_id
+    try:
+        import httpx as _httpx
+        async with _httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(
+                f"https://api.openpix.com.br/api/v1/charge/{correlation_id}",
+                headers={"Authorization": openpix_app_id},
+            )
+        logger.info(f"[check-pix] order={order_id} status={resp.status_code}")
+        if resp.status_code == 200:
+            body = resp.json()
+            charge = body.get("charge") or body
+            charge_status = charge.get("status", "")
+            paid_statuses = ["COMPLETED", "ACTIVE_PAID", "PAID"]
+            if charge_status in paid_statuses:
+                import asyncio
+                await db.orders.update_one(
+                    {"id": order_id},
+                    {"$set": {"payment_status": "paid", "status": "accepted", "updated_at": now_iso()}},
+                )
+                order_number = o.get("order_number", "?")
+                asyncio.create_task(ws_broadcast(
+                    o["restaurant_id"], "new_order",
+                    {"order_number": order_number, "id": order_id, "payment_status": "paid"},
+                ))
+                asyncio.create_task(_push_onesignal(
+                    o["restaurant_id"], order_number, f"Pix confirmado! Pedido #{order_number}"
+                ))
+                if restaurant:
+                    updated = await db.orders.find_one({"id": order_id}, {"_id": 0})
+                    asyncio.create_task(_notify_new_order(
+                        restaurant, updated, pix_via_openpix=True, order_number=order_number
+                    ))
+                    from whatsapp import notify_order_status
+                    asyncio.create_task(notify_order_status(updated, "accepted"))
+                return {"payment_status": "paid", "order_status": "accepted"}
+    except Exception as e:
+        logger.error(f"[check-pix] erro: {e}")
+
+    return {"payment_status": payment_status, "order_status": o.get("status")}
+
+
 @router.get("/track")
 async def track_by_phone(phone: str, slug: str = None):
     import re as _re

@@ -109,14 +109,20 @@ function OrderCard({ order, onSelect, onStatusChange }) {
           {nexts.map((s) => {
             const next = COL_MAP[s];
             const isCancelBtn = s === "cancelled";
+            const isAwaitingPix = order.payment_status === "awaiting" && s === "accepted";
             return (
-              <button key={s} onClick={() => onStatusChange(order.id, s)}
+              <button key={s}
+                onClick={() => !isAwaitingPix && onStatusChange(order.id, s)}
+                disabled={isAwaitingPix}
+                title={isAwaitingPix ? "Aguardando confirmação do Pix" : ""}
                 className={`flex-1 text-xs font-semibold py-1.5 rounded-xl transition-colors
                   ${isCancelBtn
                     ? "bg-red-50 dark:bg-red-900/20 text-red-500 hover:bg-red-100"
+                    : isAwaitingPix
+                    ? "bg-gray-100 dark:bg-gray-800 text-gray-400 cursor-not-allowed"
                     : "text-white hover:opacity-90"}`}
-                style={!isCancelBtn ? { background: next.color } : {}}>
-                {isCancelBtn ? "Cancelar" : next.label}
+                style={!isCancelBtn && !isAwaitingPix ? { background: next.color } : {}}>
+                {isCancelBtn ? "Cancelar" : isAwaitingPix ? "Aguard. Pix..." : next.label}
               </button>
             );
           })}
@@ -356,8 +362,10 @@ export default function Orders() {
       const { data } = await api.get("/admin/orders");
       setOrders(data);
 
-      // Novo pedido
-      const pendingNow = data.filter((o) => o.status === "pending").length;
+      // Novo pedido — exclui os que estao aguardando Pix (ainda nao foram pagos)
+      const pendingNow = data.filter(
+        (o) => o.status === "pending" && o.payment_status !== "awaiting"
+      ).length;
       if (pendingNow > prevPendingCount.current && prevPendingCount.current >= 0) {
         toast.info(`🔔 ${pendingNow - prevPendingCount.current} novo(s) pedido(s)!`, { duration: 6000 });
         playBeep('new');
@@ -445,7 +453,13 @@ export default function Orders() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="font-display font-bold text-2xl dark:text-white">Pedidos</h1>
-          <p className="text-sm text-gray-400">{orders.filter(o => o.status === "pending").length} novos · {orders.filter(o => ["accepted","preparing","ready","out_for_delivery"].includes(o.status)).length} em andamento</p>
+          <p className="text-sm text-gray-400">
+            {orders.filter(o => o.status === "pending" && o.payment_status !== "awaiting").length} novos
+            {orders.filter(o => o.payment_status === "awaiting").length > 0 && (
+              <span className="ml-2 text-orange-500">· {orders.filter(o => o.payment_status === "awaiting").length} aguard. Pix</span>
+            )}
+            {" · "}{orders.filter(o => ["accepted","preparing","ready","out_for_delivery"].includes(o.status)).length} em andamento
+          </p>
         </div>
         <div className="flex items-center gap-2">
           {/* Search */}
