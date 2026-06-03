@@ -16,6 +16,7 @@ from models import now_iso
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/whatsapp", tags=["whatsapp"])
+DEFAULT_PUBLIC_URL = "https://www.marisco27.com.br"
 
 
 def _instance_name(restaurant_id):
@@ -35,6 +36,17 @@ async def _platform(key, fallback=""):
     """Le config do super admin com fallback para env var."""
     from routes_superadmin import get_platform_setting
     return await get_platform_setting(key, os.environ.get(key.upper(), fallback))
+
+
+def _normalize_public_url(url):
+    url = (url or DEFAULT_PUBLIC_URL).strip().rstrip("/")
+    if "localhost" in url or "127.0.0.1" in url:
+        return DEFAULT_PUBLIC_URL
+    return url
+
+
+async def _public_url():
+    return _normalize_public_url(await _platform("public_url", DEFAULT_PUBLIC_URL))
 
 
 async def _send_via_evolution(restaurant_id, phone, message):
@@ -139,7 +151,7 @@ async def notify_order_status(order, new_status):
     default_statuses = ["accepted", "preparing", "ready", "out_for_delivery", "completed", "cancelled"]
     if new_status not in restaurant.get("wa_notify_statuses", default_statuses):
         return
-    public_url = os.environ.get("PUBLIC_URL", "http://localhost:3000")
+    public_url = await _public_url()
     tracking_url = f"{public_url}/pedido/{order.get('id', '')}"
     try:
         msg = STATUS_MESSAGES[new_status].format(
@@ -229,7 +241,7 @@ def _chatbot(text, restaurant):
         return out
     if re.search(r"\b(cardapio|menu|produto|lanche|comida)\b", q):
         slug = restaurant.get("slug", "")
-        url = os.environ.get("PUBLIC_URL", "http://localhost:3000")
+        url = _normalize_public_url(os.environ.get("PUBLIC_URL"))
         return f"Cardapio: {url}/loja/{slug}"
     if re.search(r"\b(obrigad|valeu|brigad)\b", q):
         return "Por nada! Bom apetite!"
