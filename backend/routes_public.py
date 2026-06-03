@@ -115,23 +115,23 @@ async def _notify_new_order(restaurant: dict, order: dict, order_in=None, pix_vi
         num = order_number or order.get("order_number", "?")
 
         if order_in:
+            # Chamado diretamente de create_order (Pydantic object disponivel)
             items_lines = []
             for it in order_in.items:
                 items_lines.append(f"  {it.quantity}x {it.product_name} - {brl_fmt(it.total_price)}")
                 for op in (it.options or []):
                     items_lines.append(f"    + {op.name}")
             items_text = "\n".join(items_lines)
-            delivery_type = "Entrega" if order_in.type == "delivery" else "Retirada"
-            address_lines = []
-            if order_in.address and order_in.type == "delivery":
+            order_type = order_in.type
+            if order_type == "delivery" and order_in.address:
                 a = order_in.address
                 ln = f"  {a.street}, {a.number}"
-                if a.complement:
-                    ln += f" ({a.complement})"
-                address_lines.append(ln)
-                if a.neighborhood:
-                    address_lines.append(f"  {a.neighborhood} - {getattr(a,'city','')} {getattr(a,'state','')}")
-            address_text = ("\n*Endereco:*\n" + "\n".join(address_lines)) if address_lines else ""
+                if a.complement: ln += f" ({a.complement})"
+                addr_parts = [ln]
+                if a.neighborhood: addr_parts.append(f"  {a.neighborhood}")
+                address_text = "\n*Endereco:*\n" + "\n".join(addr_parts)
+            else:
+                address_text = ""
             pm = (order_in.payment_method or "").strip()
             subtotal = order_in.subtotal
             delivery_fee = order_in.delivery_fee
@@ -139,13 +139,22 @@ async def _notify_new_order(restaurant: dict, order: dict, order_in=None, pix_vi
             customer_name = order_in.customer.name
             customer_phone = order_in.customer.phone
         else:
-            # Chamado do webhook: reconstroi a partir do doc salvo
-            items = order.get("items", [])
-            items_lines = [f"  {it.get('quantity')}x {it.get('product_name')} - {brl_fmt(it.get('total_price',0))}" for it in items]
-            items_text = "\n".join(items_lines)
-            delivery_type = "Entrega" if order.get("type") == "delivery" else "Retirada"
+            # Chamado do webhook/check-pix: le do documento MongoDB
+            raw_items = order.get("items") or []
+            logger.info(f"[notify_order] items={len(raw_items)} subtotal={order.get('subtotal')} total={order.get('total')}")
+            items_lines = []
+            for it in raw_items:
+                qty = it.get("quantity", 1)
+                name = it.get("product_name") or it.get("name", "?")
+                price = it.get("total_price") or it.get("unit_price", 0)
+                items_lines.append(f"  {qty}x {name} - {brl_fmt(price)}")
+                for op in (it.get("options") or []):
+                    op_name = op.get("name", "") if isinstance(op, dict) else str(op)
+                    if op_name: items_lines.append(f"    + {op_name}")
+            items_text = "\n".join(items_lines) if items_lines else "(itens nao disponiveis)"
+            order_type = order.get("type", "delivery")
             addr = order.get("address") or {}
-            if addr and order.get("type") == "delivery":
+            if order_type == "delivery" and addr:
                 ln = f"  {addr.get('street','')}, {addr.get('number','')}"
                 if addr.get("complement"): ln += f" ({addr['complement']})"
                 address_text = f"\n*Endereco:*\n{ln}"
@@ -153,13 +162,14 @@ async def _notify_new_order(restaurant: dict, order: dict, order_in=None, pix_vi
             else:
                 address_text = ""
             pm = order.get("payment_method", "")
-            subtotal = order.get("subtotal", 0)
-            delivery_fee = order.get("delivery_fee", 0)
-            total = order.get("total", 0)
+            subtotal = order.get("subtotal") or 0
+            delivery_fee = order.get("delivery_fee") or 0
+            total = order.get("total") or 0
             cust = order.get("customer") or {}
             customer_name = cust.get("name", "")
             customer_phone = cust.get("phone", "")
 
+        delivery_type = "Entrega" if order_type == "delivery" else "Retirada"
         pm_lower = pm.lower()
         if "pix" in pm_lower:
             payment_label = "Pix pago automatico Openpix" if pix_via_openpix else "Pix aguardando comprovante"
@@ -172,9 +182,10 @@ async def _notify_new_order(restaurant: dict, order: dict, order_in=None, pix_vi
         elif "vale" in pm_lower:
             payment_label = "Vale refeicao"
         else:
-            payment_label = pm
+            payment_label = pm if pm else "Nao informado"
 
         sep = "--------------------"
+        entrega_line = f"Entrega: {brl_fmt(delivery_fee)}\n" if order_type == "delivery" else ""
         msg = (
             f"*NOVO PEDIDO #{num}*\n"
             f"Data: {dt_str}\n"
@@ -187,7 +198,7 @@ async def _notify_new_order(restaurant: dict, order: dict, order_in=None, pix_vi
             f"*Itens:*\n{items_text}\n"
             f"{sep}\n"
             f"Subtotal: {brl_fmt(subtotal)}\n"
-            f"Entrega: {brl_fmt(delivery_fee)}\n"
+            f"{entrega_line}"
             f"*TOTAL: {brl_fmt(total)}*\n"
             f"*Pagamento:* {payment_label}\n"
             f"{sep}"
