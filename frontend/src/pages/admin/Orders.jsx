@@ -40,6 +40,11 @@ const NEXT_STATUS = {
 
 const STATUS_LABEL = Object.fromEntries(COLUMNS.map((c) => [c.key, c.label]));
 
+const ORDER_SOUND = {
+  new: "/sounds/new-order.wav",
+  cancel: "/sounds/cancel-order.wav",
+};
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 function timeSince(iso) {
   const diff = Math.floor((Date.now() - new Date(iso)) / 60000);
@@ -325,34 +330,12 @@ export default function Orders() {
   const prevPendingCount = useRef(0);
   const prevCancelCount = useRef(-1);
 
-  // Web Audio API beep — funciona sem interação do usuário após primeiro clique em qualquer lugar
-  const playBeep = useCallback((type = "new") => {
+  // Toca os alertas configurados em public/sounds.
+  const playOrderSound = useCallback((type = "new") => {
     try {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
-      const gain = ctx.createGain();
-      gain.connect(ctx.destination);
-      if (type === "new") {
-        // Dois bips agudos para novo pedido
-        [0, 0.18].forEach(offset => {
-          const osc = ctx.createOscillator();
-          osc.connect(gain);
-          osc.frequency.value = 880;
-          gain.gain.setValueAtTime(0.4, ctx.currentTime + offset);
-          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + offset + 0.15);
-          osc.start(ctx.currentTime + offset);
-          osc.stop(ctx.currentTime + offset + 0.15);
-        });
-      } else {
-        // Tom grave descendente para cancelamento
-        const osc = ctx.createOscillator();
-        osc.connect(gain);
-        osc.frequency.setValueAtTime(440, ctx.currentTime);
-        osc.frequency.linearRampToValueAtTime(220, ctx.currentTime + 0.4);
-        gain.gain.setValueAtTime(0.4, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
-        osc.start();
-        osc.stop(ctx.currentTime + 0.4);
-      }
+      const audio = new Audio(ORDER_SOUND[type] || ORDER_SOUND.new);
+      audio.currentTime = 0;
+      audio.play().catch(() => {});
     } catch {}
   }, []);
 
@@ -368,7 +351,7 @@ export default function Orders() {
       ).length;
       if (pendingNow > prevPendingCount.current && prevPendingCount.current >= 0) {
         toast.info(`🔔 ${pendingNow - prevPendingCount.current} novo(s) pedido(s)!`, { duration: 6000 });
-        playBeep('new');
+        playOrderSound('new');
       }
       prevPendingCount.current = pendingNow;
 
@@ -376,14 +359,14 @@ export default function Orders() {
       const cancelNow = data.filter((o) => o.status === "cancelled").length;
       if (prevCancelCount.current >= 0 && cancelNow > prevCancelCount.current) {
         toast.warning(`❌ ${cancelNow - prevCancelCount.current} pedido(s) cancelado(s)`, { duration: 6000 });
-        playBeep('cancel');
+        playOrderSound('cancel');
       }
       if (prevCancelCount.current < 0) prevCancelCount.current = cancelNow;
       else prevCancelCount.current = cancelNow;
     } finally {
       if (!silent) setLoading(false);
     }
-  }, []);
+  }, [playOrderSound]);
 
   // Auth context para pegar token e restaurant_id
   const { user, token } = useAuth();
@@ -393,10 +376,10 @@ export default function Orders() {
     restaurantId: user?.restaurant_id,
     token: token,
     onNewOrder: useCallback((data) => {
-      playBeep('new');
+      playOrderSound('new');
       toast.info(`🔔 Novo pedido #${data.order_number}!`, { duration: 6000 });
       load(true);
-    }, [load, playBeep]),
+    }, [load, playOrderSound]),
     onOrderUpdated: useCallback(() => {
       load(true);
     }, [load]),
