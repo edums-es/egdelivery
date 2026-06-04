@@ -98,6 +98,9 @@ class DeliveryZone(BaseModel):
     neighborhood: str
     fee: float = 0.0
     active: bool = True
+    aliases: List[str] = []
+    cep_prefixes: List[str] = []
+    city_names: List[str] = []
 
 
 # ---------- Opening hours ----------

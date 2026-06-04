@@ -121,6 +121,35 @@ def _zone_matches_neighborhood(zone_name: str, neighborhood_name: str) -> bool:
     )
 
 
+def _split_terms(value):
+    if isinstance(value, list):
+        return value
+    return str(value or "").split(",")
+
+
+def _zone_matches_cep(zone: dict, cep_digits: str) -> bool:
+    import re
+    prefixes = [re.sub(r"\D", "", p or "") for p in _split_terms(zone.get("cep_prefixes"))]
+    return any(prefix and cep_digits.startswith(prefix) for prefix in prefixes)
+
+
+def _zone_matches_address(zone: dict, address_data: dict, cep_digits: str = "") -> bool:
+    neighborhood_name = (address_data or {}).get("bairro") or ""
+    city_name = (address_data or {}).get("localidade") or ""
+    street_name = (address_data or {}).get("logradouro") or ""
+    terms = [zone.get("neighborhood"), *_split_terms(zone.get("aliases"))]
+    city_terms = _split_terms(zone.get("city_names"))
+    return (
+        any(
+            _zone_matches_neighborhood(term, value)
+            for term in terms
+            for value in (neighborhood_name, city_name, street_name)
+        )
+        or any(_zone_matches_neighborhood(term, city_name) for term in city_terms)
+        or _zone_matches_cep(zone, cep_digits)
+    )
+
+
 async def _lookup_cep(cep: str) -> dict:
     import re
     import httpx as _httpx
@@ -142,6 +171,7 @@ async def _lookup_cep(cep: str) -> dict:
 
     if data.get("erro"):
         raise HTTPException(status_code=400, detail="CEP nao encontrado")
+    data["digits"] = digits
     return data
 
 
@@ -157,7 +187,7 @@ async def _expected_delivery_fee(restaurant: dict, order: OrderIn):
     if active_zones:
         cep_data = await _lookup_cep(order.address.cep if order.address else "")
         cep_neighborhood = cep_data.get("bairro") or ""
-        zone = next((z for z in active_zones if _zone_matches_neighborhood(z.get("neighborhood"), cep_neighborhood)), None)
+        zone = next((z for z in active_zones if _zone_matches_address(z, cep_data, cep_data.get("digits", ""))), None)
         if not zone:
             raise HTTPException(status_code=400, detail="Ainda nao atendemos esse CEP")
         if order.address:

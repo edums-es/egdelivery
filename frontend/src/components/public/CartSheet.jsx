@@ -32,6 +32,20 @@ const zoneMatchesNeighborhood = (zoneName, neighborhoodName) => {
     (neighborhood.length >= 4 && zone.includes(neighborhood))
   );
 };
+const splitTerms = (value) =>
+  Array.isArray(value) ? value : String(value || "").split(",");
+const zoneMatchesCep = (zone, cepDigits) =>
+  splitTerms(zone.cep_prefixes).map(onlyDigits).filter(Boolean).some((prefix) => cepDigits.startsWith(prefix));
+const zoneMatchesAddress = (zone, addressData = {}, cepDigits = "") => {
+  const values = [addressData.bairro, addressData.localidade, addressData.logradouro];
+  const regionTerms = [zone.neighborhood, ...splitTerms(zone.aliases)];
+  const cityTerms = splitTerms(zone.city_names);
+  return (
+    regionTerms.some((term) => values.some((value) => zoneMatchesNeighborhood(term, value))) ||
+    cityTerms.some((term) => zoneMatchesNeighborhood(term, addressData.localidade)) ||
+    zoneMatchesCep(zone, cepDigits)
+  );
+};
 
 export default function CartSheet({ open, onOpenChange, restaurant, slug }) {
   const { items, updateQuantity, removeItem, subtotal, clearCart } = useCart();
@@ -67,11 +81,11 @@ export default function CartSheet({ open, onOpenChange, restaurant, slug }) {
   const activeZones = useMemo(() => zones.filter((z) => z.active), [zones]);
   const selectedZone = useMemo(() => {
     if (!neighborhood) return null;
-    return activeZones.find((z) => zoneMatchesNeighborhood(z.neighborhood, neighborhood)) || null;
+    return activeZones.find((z) => zoneMatchesAddress(z, { bairro: neighborhood })) || null;
   }, [activeZones, neighborhood]);
   const cepZone = useMemo(() => {
-    if (!cepCheck?.neighborhood) return null;
-    return activeZones.find((z) => zoneMatchesNeighborhood(z.neighborhood, cepCheck.neighborhood)) || null;
+    if (!cepCheck?.neighborhood && !cepCheck?.digits) return null;
+    return activeZones.find((z) => zoneMatchesAddress(z, cepCheck, cepCheck.digits)) || null;
   }, [activeZones, cepCheck]);
 
   const deliveryFee = useMemo(() => {
@@ -124,8 +138,15 @@ export default function CartSheet({ open, onOpenChange, restaurant, slug }) {
           toast.error("CEP nao encontrado");
           return;
         }
-        const zone = activeZones.find((z) => zoneMatchesNeighborhood(z.neighborhood, data.bairro));
-        setCepCheck({ digits, neighborhood: data.bairro || "", allowed: activeZones.length === 0 || !!zone });
+        const addressData = {
+          digits,
+          bairro: data.bairro || "",
+          neighborhood: data.bairro || "",
+          localidade: data.localidade || "",
+          logradouro: data.logradouro || "",
+        };
+        const zone = activeZones.find((z) => zoneMatchesAddress(z, addressData, digits));
+        setCepCheck({ ...addressData, allowed: activeZones.length === 0 || !!zone });
         if (data.logradouro) setStreet(data.logradouro);
         if (data.bairro) setNeighborhood(data.bairro);
       })
