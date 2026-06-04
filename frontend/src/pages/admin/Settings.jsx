@@ -209,12 +209,15 @@ export default function Settings() {
                 <span className="w-24 text-sm font-medium text-gray-700 dark:text-gray-300">{d.label}</span>
                 <Switch checked={h.open} onCheckedChange={(v) => setHour(d.key, { open: v })} />
                 {h.open ? (
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <Input type="time" value={h.start} onChange={(e) => setHour(d.key, { start: e.target.value })}
                       className="w-28 h-9 dark:bg-gray-800 dark:border-gray-600 dark:text-white" />
                     <span className="text-gray-400 text-sm">até</span>
                     <Input type="time" value={h.end} onChange={(e) => setHour(d.key, { end: e.target.value })}
                       className="w-28 h-9 dark:bg-gray-800 dark:border-gray-600 dark:text-white" />
+                    {h.end <= h.start && (
+                      <span className="text-xs text-amber-500 font-medium">vira o dia</span>
+                    )}
                   </div>
                 ) : (
                   <span className="text-sm text-gray-400">Fechado</span>

@@ -102,6 +102,33 @@ def brl_fmt(value):
         return "R$ 0,00"
 
 
+def _normalize_text(value: str) -> str:
+    import unicodedata
+    value = unicodedata.normalize("NFD", value or "")
+    value = "".join(ch for ch in value if unicodedata.category(ch) != "Mn")
+    return value.strip().lower()
+
+
+def _expected_delivery_fee(restaurant: dict, order: OrderIn):
+    if order.type != "delivery":
+        return 0.0
+
+    if restaurant.get("accepts_delivery") is False:
+        raise HTTPException(status_code=400, detail="Restaurante nao aceita entrega")
+
+    if restaurant.get("delivery_fee_mode") == "neighborhood":
+        active_zones = [z for z in (restaurant.get("delivery_zones") or []) if z.get("active")]
+        neighborhood = _normalize_text(order.address.neighborhood if order.address else "")
+        if active_zones:
+            zone = next((z for z in active_zones if _normalize_text(z.get("neighborhood")) == neighborhood), None)
+            if not zone:
+                raise HTTPException(status_code=400, detail="Ainda nao atendemos esse bairro")
+            return float(zone.get("fee") or 0)
+        return 0.0
+
+    return float(restaurant.get("flat_delivery_fee") or 0)
+
+
 async def _notify_new_order(restaurant: dict, order: dict, order_in=None, pix_via_openpix: bool = False, order_number: int = None):
     """Envia WhatsApp ao dono quando novo pedido chega (ou e pago via Pix)."""
     try:
@@ -242,6 +269,12 @@ async def create_order(slug: str, order: OrderIn):
             status_code=400,
             detail=f"Pedido minimo de R$ {r.get('minimum_order'):.2f}",
         )
+    if order.type == "pickup" and r.get("accepts_pickup") is False:
+        raise HTTPException(status_code=400, detail="Restaurante nao aceita retirada")
+    expected_fee = _expected_delivery_fee(r, order)
+    if abs(float(order.delivery_fee or 0) - expected_fee) > 0.01:
+        raise HTTPException(status_code=400, detail="Taxa de entrega invalida para este endereco")
+
     count = await db.orders.count_documents({"restaurant_id": r["id"]})
     order_number = count + 1
     doc = order.model_dump()

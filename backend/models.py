@@ -221,16 +221,27 @@ def is_restaurant_open(restaurant: dict) -> bool:
         nowdt = datetime.now(ZoneInfo("America/Sao_Paulo"))
     except Exception:
         nowdt = datetime.now()
-    key = _WEEKDAY_KEYS[nowdt.weekday()]
-    day = hours.get(key)
-    if not day or not day.get("open"):
-        return False
     cur = nowdt.strftime("%H:%M")
-    start = day.get("start", "00:00")
-    end = day.get("end", "23:59")
-    if end <= start:  # crosses midnight
-        return cur >= start or cur <= end
-    return start <= cur <= end
+    weekday = nowdt.weekday()
+    day = hours.get(_WEEKDAY_KEYS[weekday])
+
+    if day and day.get("open"):
+        start = day.get("start", "00:00")
+        end = day.get("end", "23:59")
+        if end <= start:
+            if cur >= start:
+                return True
+        elif start <= cur <= end:
+            return True
+
+    prev_day = hours.get(_WEEKDAY_KEYS[(weekday - 1) % 7])
+    if prev_day and prev_day.get("open"):
+        start = prev_day.get("start", "00:00")
+        end = prev_day.get("end", "23:59")
+        if end <= start and cur <= end:
+            return True
+
+    return False
 
 
 def clean(doc: dict) -> dict:
