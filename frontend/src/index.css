@@ -73,6 +73,13 @@ body {
   .brand-text { color: var(--brand-primary); }
   .brand-border { border-color: var(--brand-primary); }
   .brand-soft { background-color: var(--brand-secondary); }
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 /* ── DARK MODE GLOBAL OVERRIDES ──────────────────────────────────────────

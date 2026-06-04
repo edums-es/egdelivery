@@ -176,8 +176,7 @@ function MenuContent({ data, slug }) {
                 const hasText = b.title || b.subtitle;
                 return (
                   <div key={b.id} onClick={() => linked && setSelectedProduct(linked)}
-                    className={`relative shrink-0 w-[85%] rounded-2xl overflow-hidden snap-start border border-white/10 ${linked ? "cursor-pointer" : ""}`}
-                    style={{height:160}}>
+                    className={`relative shrink-0 w-[85%] aspect-[2.25/1] rounded-xl overflow-hidden snap-start bg-black ${linked ? "cursor-pointer" : ""}`}>
                     {b.image_url
                       ? <img src={b.image_url} alt={b.title || ""}
                           style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover",objectPosition:"center"}}/>
