@@ -54,6 +54,15 @@ function useNotificationSound() {
   return play;
 }
 
+// Extrai mensagem legível de erros da API (FastAPI retorna array em 422)
+const apiErr = (err, fallback) => {
+  const d = err?.response?.data?.detail;
+  if (!d) return fallback;
+  if (typeof d === "string") return d;
+  if (Array.isArray(d)) return d.map((e) => e.msg ?? JSON.stringify(e)).join("; ");
+  return fallback;
+};
+
 // ── Modais de caixa ──────────────────────────────────────────────────────────
 
 function CaixaMovimentoModal({ type, onClose, onConfirm }) {
@@ -70,6 +79,7 @@ function CaixaMovimentoModal({ type, onClose, onConfirm }) {
     if (!reason.trim()) { toast.error("Informe o motivo"); return; }
     setLoading(true);
     try { await onConfirm(parseFloat(amount), reason.trim()); onClose(); }
+    catch { /* erro já exibido via toast no handler */ }
     finally { setLoading(false); }
   };
 
@@ -120,6 +130,7 @@ function CaixaFecharModal({ caixa, movimentos, onClose, onConfirm }) {
   const handleClose = async () => {
     setLoading(true);
     try { await onConfirm(); onClose(); }
+    catch { /* erro já exibido via toast no handler */ }
     finally { setLoading(false); }
   };
 
@@ -231,7 +242,7 @@ export default function PDV() {
       setOpeningAmount("");
       fetchCaixa();
     } catch (err) {
-      toast.error(err?.response?.data?.detail || "Erro ao abrir caixa");
+      toast.error(apiErr(err, "Erro ao abrir caixa"));
     } finally {
       setOpeningLoading(false);
     }
@@ -245,20 +256,20 @@ export default function PDV() {
       toast.success(type === "sangria" ? "Sangria registrada!" : "Suprimento registrado!");
       fetchCaixa();
     } catch (err) {
-      toast.error(err?.response?.data?.detail || "Erro ao registrar movimento");
+      toast.error(apiErr(err, "Erro ao registrar movimento"));
       throw err;
     }
   };
 
   const handleFecharCaixa = async () => {
     try {
-      await api.post("/admin/caixa/fechar");
+      await api.post("/admin/caixa/fechar", {});
       toast.success("Caixa fechado!");
       setCaixa(null);
       setCaixaMovimentos([]);
       fetchCaixa();
     } catch (err) {
-      toast.error(err?.response?.data?.detail || "Erro ao fechar caixa");
+      toast.error(apiErr(err, "Erro ao fechar caixa"));
       throw err;
     }
   };
@@ -941,4 +952,6 @@ export default function PDV() {
       </Dialog>
     </div>
   );
+}
+
 }

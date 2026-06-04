@@ -31,7 +31,12 @@ class CaixaFecharIn(BaseModel):
 class MovimentoIn(BaseModel):
     amount: float
     description: Optional[str] = ""
-    type: str  # "sangria" | "suprimento"
+    reason: Optional[str] = None   # alias enviado pelo frontend
+    type: Optional[str] = None     # hardcoded pelo endpoint, não obrigatório
+
+    @property
+    def motivo(self) -> str:
+        return self.description or self.reason or ""
 
 
 async def _get_caixa_aberto(restaurant_id: str):
@@ -130,7 +135,7 @@ async def sangria(data: MovimentoIn, user=Depends(require_restaurant)):
         "id": new_id(),
         "type": "sangria",
         "amount": data.amount,
-        "description": data.description,
+        "description": data.motivo,
         "created_at": now_iso(),
     }
     await db.caixa_sessions.update_one(
@@ -148,7 +153,7 @@ async def suprimento(data: MovimentoIn, user=Depends(require_restaurant)):
         "id": new_id(),
         "type": "suprimento",
         "amount": data.amount,
-        "description": data.description,
+        "description": data.motivo,
         "created_at": now_iso(),
     }
     await db.caixa_sessions.update_one(
