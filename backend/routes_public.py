@@ -109,20 +109,52 @@ def _normalize_text(value: str) -> str:
     return value.strip().lower()
 
 
-def _expected_delivery_fee(restaurant: dict, order: OrderIn):
+async def _lookup_cep(cep: str) -> dict:
+    import re
+    import httpx as _httpx
+
+    digits = re.sub(r"\D", "", cep or "")
+    if len(digits) != 8:
+        raise HTTPException(status_code=400, detail="Informe um CEP valido para entrega")
+
+    try:
+        async with _httpx.AsyncClient(timeout=6) as client:
+            resp = await client.get(f"https://viacep.com.br/ws/{digits}/json/")
+        if resp.status_code != 200:
+            raise HTTPException(status_code=400, detail="Nao foi possivel validar o CEP")
+        data = resp.json()
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=400, detail="Nao foi possivel validar o CEP")
+
+    if data.get("erro"):
+        raise HTTPException(status_code=400, detail="CEP nao encontrado")
+    return data
+
+
+async def _expected_delivery_fee(restaurant: dict, order: OrderIn):
     if order.type != "delivery":
         return 0.0
 
     if restaurant.get("accepts_delivery") is False:
         raise HTTPException(status_code=400, detail="Restaurante nao aceita entrega")
 
+    active_zones = [z for z in (restaurant.get("delivery_zones") or []) if z.get("active")]
+    zone = None
+    if active_zones:
+        cep_data = await _lookup_cep(order.address.cep if order.address else "")
+        cep_neighborhood = cep_data.get("bairro") or ""
+        zone = next((z for z in active_zones if _normalize_text(z.get("neighborhood")) == _normalize_text(cep_neighborhood)), None)
+        if not zone:
+            raise HTTPException(status_code=400, detail="Ainda nao atendemos esse CEP")
+        if order.address:
+            order.address.neighborhood = cep_neighborhood
+            if cep_data.get("logradouro"):
+                order.address.street = cep_data["logradouro"]
+
     if restaurant.get("delivery_fee_mode") == "neighborhood":
-        active_zones = [z for z in (restaurant.get("delivery_zones") or []) if z.get("active")]
-        neighborhood = _normalize_text(order.address.neighborhood if order.address else "")
-        if active_zones:
-            zone = next((z for z in active_zones if _normalize_text(z.get("neighborhood")) == neighborhood), None)
-            if not zone:
-                raise HTTPException(status_code=400, detail="Ainda nao atendemos esse bairro")
+        if zone:
             return float(zone.get("fee") or 0)
         return 0.0
 
@@ -271,7 +303,17 @@ async def create_order(slug: str, order: OrderIn):
         )
     if order.type == "pickup" and r.get("accepts_pickup") is False:
         raise HTTPException(status_code=400, detail="Restaurante nao aceita retirada")
-    expected_fee = _expected_delivery_fee(r, order)
+    free_delivery_coupon = None
+    if order.coupon_code:
+        free_delivery_coupon = await db.coupons.find_one({
+            "restaurant_id": r["id"],
+            "code": order.coupon_code.upper(),
+            "is_active": True,
+            "free_delivery": True,
+        })
+    expected_fee = await _expected_delivery_fee(r, order)
+    if free_delivery_coupon and order.subtotal >= free_delivery_coupon.get("min_order", 0):
+        expected_fee = 0.0
     if abs(float(order.delivery_fee or 0) - expected_fee) > 0.01:
         raise HTTPException(status_code=400, detail="Taxa de entrega invalida para este endereco")
 

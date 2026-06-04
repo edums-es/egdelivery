@@ -52,6 +52,7 @@ export default function CartSheet({ open, onOpenChange, restaurant, slug }) {
   const [payment, setPayment] = useState(restaurant?.payment_methods?.[0] || "Dinheiro");
   const [changeFor, setChangeFor] = useState("");
   const [orderNotes, setOrderNotes] = useState("");
+  const [cepCheck, setCepCheck] = useState(null);
 
   const zones = useMemo(() => restaurant?.delivery_zones || [], [restaurant?.delivery_zones]);
   const activeZones = useMemo(() => zones.filter((z) => z.active), [zones]);
@@ -60,15 +61,21 @@ export default function CartSheet({ open, onOpenChange, restaurant, slug }) {
     if (!current) return null;
     return activeZones.find((z) => normalizeText(z.neighborhood) === current) || null;
   }, [activeZones, neighborhood]);
+  const cepZone = useMemo(() => {
+    const current = normalizeText(cepCheck?.neighborhood);
+    if (!current) return null;
+    return activeZones.find((z) => normalizeText(z.neighborhood) === current) || null;
+  }, [activeZones, cepCheck]);
 
   const deliveryFee = useMemo(() => {
     if (type === "pickup") return 0;
     if (coupon?.free_delivery) return 0;
     if (restaurant?.delivery_fee_mode === "neighborhood") {
-      return selectedZone ? Number(selectedZone.fee) || 0 : 0;
+      const zone = cepZone || selectedZone;
+      return zone ? Number(zone.fee) || 0 : 0;
     }
     return restaurant?.flat_delivery_fee || 0;
-  }, [type, coupon, restaurant, selectedZone]);
+  }, [type, coupon, restaurant, cepZone, selectedZone]);
 
   const discount = coupon?.discount || 0;
   const total = Math.max(0, subtotal + deliveryFee - discount);
@@ -91,7 +98,14 @@ export default function CartSheet({ open, onOpenChange, restaurant, slug }) {
 
   useEffect(() => {
     const digits = onlyDigits(cep);
-    if (type !== "delivery" || digits.length !== 8) return;
+    if (type !== "delivery") {
+      setCepCheck(null);
+      return;
+    }
+    if (digits.length !== 8) {
+      setCepCheck(null);
+      return;
+    }
 
     let cancelled = false;
     fetch(`https://viacep.com.br/ws/${digits}/json/`)
@@ -99,18 +113,24 @@ export default function CartSheet({ open, onOpenChange, restaurant, slug }) {
       .then((data) => {
         if (cancelled) return;
         if (data?.erro) {
+          setCepCheck({ digits, neighborhood: "", allowed: false });
           toast.error("CEP nao encontrado");
           return;
         }
+        const zone = activeZones.find((z) => normalizeText(z.neighborhood) === normalizeText(data.bairro));
+        setCepCheck({ digits, neighborhood: data.bairro || "", allowed: activeZones.length === 0 || !!zone });
         if (data.logradouro) setStreet(data.logradouro);
         if (data.bairro) setNeighborhood(data.bairro);
       })
       .catch(() => {
-        if (!cancelled) toast.error("Nao foi possivel consultar o CEP");
+        if (!cancelled) {
+          setCepCheck({ digits, neighborhood: "", allowed: false });
+          toast.error("Nao foi possivel consultar o CEP");
+        }
       });
 
     return () => { cancelled = true; };
-  }, [cep, type]);
+  }, [cep, type, activeZones]);
 
   const applyCoupon = async () => {
     if (!couponInput.trim()) return;
@@ -156,8 +176,19 @@ export default function CartSheet({ open, onOpenChange, restaurant, slug }) {
     if (type === "delivery" && (!street.trim() || !number.trim() || !neighborhood.trim())) {
       toast.error("Preencha o endereço de entrega"); return false;
     }
-    if (type === "delivery" && restaurant?.delivery_fee_mode === "neighborhood" && activeZones.length > 0 && !selectedZone) {
-      toast.error("Ainda nao atendemos esse bairro");
+    if (type === "delivery" && activeZones.length > 0) {
+      const digits = onlyDigits(cep);
+      if (digits.length !== 8 || cepCheck?.digits !== digits) {
+        toast.error("Informe um CEP valido para consultar a entrega");
+        return false;
+      }
+      if (!cepCheck.allowed) {
+        toast.error("Ainda nao atendemos esse CEP");
+        return false;
+      }
+    }
+    if (type === "delivery" && restaurant?.delivery_fee_mode === "neighborhood" && activeZones.length > 0 && !cepZone) {
+      toast.error("Ainda nao atendemos esse CEP");
       return false;
     }
     if (subtotal < (restaurant?.minimum_order || 0)) {
@@ -469,8 +500,8 @@ export default function CartSheet({ open, onOpenChange, restaurant, slug }) {
                   ) : (
                     <Input value={neighborhood} onChange={(e) => setNeighborhood(e.target.value)} data-testid="checkout-neighborhood" className="mt-1" />
                   )}
-                  {restaurant?.delivery_fee_mode === "neighborhood" && activeZones.length > 0 && neighborhood && !selectedZone && (
-                    <p className="text-xs text-red-400 mt-1">Ainda nao atendemos esse bairro.</p>
+                  {activeZones.length > 0 && cepCheck?.digits === onlyDigits(cep) && cepCheck.allowed === false && (
+                    <p className="text-xs text-red-400 mt-1">Ainda nao atendemos esse CEP.</p>
                   )}
                 </div>
                 <div className="grid grid-cols-2 gap-3">
