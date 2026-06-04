@@ -238,18 +238,29 @@ export default function PDV() {
   };
 
   const handleMovimento = async (amount, reason) => {
-    const endpoint = movimentoModal === "sangria" ? "/admin/caixa/sangria" : "/admin/caixa/suprimento";
-    await api.post(endpoint, { amount, reason });
-    toast.success(movimentoModal === "sangria" ? "Sangria registrada!" : "Suprimento registrado!");
-    fetchCaixa();
+    const type = movimentoModal;
+    const endpoint = type === "sangria" ? "/admin/caixa/sangria" : "/admin/caixa/suprimento";
+    try {
+      await api.post(endpoint, { amount, reason });
+      toast.success(type === "sangria" ? "Sangria registrada!" : "Suprimento registrado!");
+      fetchCaixa();
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Erro ao registrar movimento");
+      throw err;
+    }
   };
 
   const handleFecharCaixa = async () => {
-    await api.post("/admin/caixa/fechar");
-    toast.success("Caixa fechado!");
-    setCaixa(null);
-    setCaixaMovimentos([]);
-    fetchCaixa();
+    try {
+      await api.post("/admin/caixa/fechar");
+      toast.success("Caixa fechado!");
+      setCaixa(null);
+      setCaixaMovimentos([]);
+      fetchCaixa();
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Erro ao fechar caixa");
+      throw err;
+    }
   };
 
   const caixaSangrias = caixaMovimentos.filter(m => m.type === "sangria").reduce((s, m) => s + m.amount, 0);

@@ -17,8 +17,7 @@ const NAV_GROUPS = [
     label: "Operação",
     items: [
       { to: "/supermaster",          label: "Dashboard",    icon: LayoutDashboard, end: true },
-      { to: "/supermaster/pdv",      label: "PDV",          icon: ShoppingCart },
-      { to: "/supermaster/caixa",    label: "Caixa",        icon: Wallet },
+      { to: "/supermaster/pdv",      label: "PDV / Caixa",  icon: ShoppingCart },
       { to: "/supermaster/pedidos",  label: "Pedidos",      icon: ClipboardList },
       { to: "/supermaster/mesas",    label: "Mesas / QR",   icon: QrCode },
     ],
