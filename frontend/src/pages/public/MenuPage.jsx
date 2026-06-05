@@ -20,10 +20,16 @@ function hexFg(hex) {
   return (0.299*r + 0.587*g + 0.114*b)/255 > 0.6 ? "#111" : "#fff";
 }
 
+function hexRgba(hex, alpha = 0.18) {
+  const c = (hex || "#22E39B").replace("#", "");
+  const r = parseInt(c.substr(0,2),16), g = parseInt(c.substr(2,2),16), b = parseInt(c.substr(4,2),16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
 const DAY_LABELS = {mon:"Segunda",tue:"Terça",wed:"Quarta",thu:"Quinta",fri:"Sexta",sat:"Sábado",sun:"Domingo"};
 
 /* ── Sub-components ── */
-function ReviewsTab({ slug, reviews, summary }) {
+function ReviewsTab({ slug, reviews, summary, accent, textColor = "#FFFFFF", mutedColor = "#A7A7A7", buttonTextColor = "#04110C" }) {
   const [list, setList] = useState(reviews);
   const [name, setName] = useState(""); const [rating, setRating] = useState(5); const [comment, setComment] = useState("");
   const [sending, setSending] = useState(false);
@@ -37,26 +43,26 @@ function ReviewsTab({ slug, reviews, summary }) {
   return (
     <div className="px-4 mt-4 space-y-4 pb-8">
       <div className="bg-[#1A1A1A] border border-white/10 rounded-2xl p-4 text-center">
-        <p className="font-display font-extrabold text-4xl text-white">{summary?.average || 0}</p>
+        <p className="font-display font-extrabold text-4xl" style={{color:textColor}}>{summary?.average || 0}</p>
         <div className="flex justify-center gap-1 my-2">
-          {[1,2,3,4,5].map(s=><Star key={s} className={`w-5 h-5 ${s<=Math.round(summary?.average||0)?"fill-amber-400 text-amber-400":"text-gray-600"}`}/>)}
+          {[1,2,3,4,5].map(s=><Star key={s} className={`w-5 h-5 ${s<=Math.round(summary?.average||0)?"":"text-gray-600"}`} style={s<=Math.round(summary?.average||0)?{fill:accent,color:accent}:undefined}/>)}
         </div>
-        <p className="text-sm text-gray-500">{summary?.count||0} avaliações</p>
+        <p className="text-sm" style={{color:mutedColor}}>{summary?.count||0} avaliacoes</p>
       </div>
       <div className="bg-[#1A1A1A] border border-white/10 rounded-2xl p-4 space-y-3">
-        <p className="font-semibold text-white">Deixe sua avaliação</p>
-        <div className="flex gap-1">{[1,2,3,4,5].map(s=><button key={s} onClick={()=>setRating(s)}><Star className={`w-7 h-7 ${s<=rating?"fill-amber-400 text-amber-400":"text-gray-600"}`}/></button>)}</div>
+        <p className="font-semibold" style={{color:textColor}}>Deixe sua avaliacao</p>
+        <div className="flex gap-1">{[1,2,3,4,5].map(s=><button key={s} onClick={()=>setRating(s)}><Star className={`w-7 h-7 ${s<=rating?"":"text-gray-600"}`} style={s<=rating?{fill:accent,color:accent}:undefined}/></button>)}</div>
         <input value={name} onChange={e=>setName(e.target.value)} placeholder="Seu nome" className="w-full bg-[#111] border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-600 outline-none"/>
         <textarea value={comment} onChange={e=>setComment(e.target.value)} placeholder="Comentário (opcional)" rows={2} className="w-full bg-[#111] border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-600 outline-none resize-none"/>
-        <button onClick={submit} disabled={sending} style={{background:"var(--brand-primary)"}} className="w-full rounded-xl h-11 font-semibold text-white">Enviar avaliação</button>
+        <button onClick={submit} disabled={sending} style={{background:"var(--brand-primary)",color:buttonTextColor}} className="w-full rounded-xl h-11 font-semibold">Enviar avaliacao</button>
       </div>
       {list.map(r=>(
         <div key={r.id} className="bg-[#1A1A1A] border border-white/10 rounded-xl p-3">
           <div className="flex justify-between items-center mb-1">
-            <p className="font-medium text-white text-sm">{r.name}</p>
-            <div className="flex gap-0.5">{[1,2,3,4,5].map(s=><Star key={s} className={`w-3 h-3 ${s<=r.rating?"fill-amber-400 text-amber-400":"text-gray-600"}`}/>)}</div>
+            <p className="font-medium text-sm" style={{color:textColor}}>{r.name}</p>
+            <div className="flex gap-0.5">{[1,2,3,4,5].map(s=><Star key={s} className={`w-3 h-3 ${s<=r.rating?"":"text-gray-600"}`} style={s<=r.rating?{fill:accent,color:accent}:undefined}/>)}</div>
           </div>
-          {r.comment && <p className="text-xs text-gray-400">{r.comment}</p>}
+          {r.comment && <p className="text-xs" style={{color:mutedColor}}>{r.comment}</p>}
         </div>
       ))}
     </div>
@@ -73,7 +79,13 @@ function MenuContent({ data, slug }) {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [cartOpen, setCartOpen] = useState(false);
   const sectionRefs = useRef({});
-  const accent = restaurant.primary_color || "#D4AF37";
+  const accent = restaurant.primary_color || "#22E39B";
+  const detailColor = restaurant.secondary_color || accent;
+  const textColor = restaurant.menu_text_color || "#FFFFFF";
+  const mutedColor = restaurant.menu_muted_text_color || "#A7A7A7";
+  const buttonTextColor = restaurant.button_text_color || hexFg(accent);
+  const textStyle = { color: textColor };
+  const mutedStyle = { color: mutedColor };
 
   const filtered = useMemo(() => {
     if (!search.trim()) return products;
@@ -101,7 +113,7 @@ function MenuContent({ data, slug }) {
   ];
 
   return (
-    <div className="w-full max-w-md mx-auto min-h-screen relative pb-32" style={{background:"#0A0A0A"}}>
+    <div className="eg-menu w-full max-w-md mx-auto min-h-screen relative pb-32" style={{background:"#0A0A0A", color:textColor}}>
 
       {/* Cover */}
       <div className="relative w-full h-56 overflow-hidden">
@@ -123,10 +135,10 @@ function MenuContent({ data, slug }) {
           </div>
           <div className="flex-1 min-w-0 pt-1">
             <div className="flex items-center gap-1.5 mb-0.5">
-              <h1 className="font-display font-bold text-xl text-white leading-tight truncate">{restaurant.name}</h1>
+              <h1 className="font-display font-bold text-xl leading-tight truncate" style={textStyle}>{restaurant.name}</h1>
               <CheckCircle2 className="w-4 h-4 shrink-0" style={{color:accent}}/>
             </div>
-            <p className="text-xs text-gray-400 truncate mb-2">{restaurant.tagline || restaurant.description}</p>
+            <p className="text-xs truncate mb-2" style={mutedStyle}>{restaurant.tagline || restaurant.description}</p>
             <div className="flex items-center gap-2 flex-wrap">
               <span className={`text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1 ${restaurant.is_open ? "text-green-400" : "text-red-400"}`}
                 style={{background: restaurant.is_open ? "rgba(74,222,128,0.15)" : "rgba(248,113,113,0.15)", border: `1px solid ${restaurant.is_open ? "rgba(74,222,128,0.3)" : "rgba(248,113,113,0.3)"}`}}>
@@ -135,7 +147,7 @@ function MenuContent({ data, slug }) {
               </span>
               {reviews_summary?.count > 0 && (
                 <span className="text-xs text-gray-400 flex items-center gap-0.5">
-                  <Star className="w-3 h-3 fill-amber-400 text-amber-400"/> {reviews_summary.average}
+                  <Star className="w-3 h-3" style={{fill:detailColor,color:detailColor}}/> {reviews_summary.average}
                 </span>
               )}
             </div>
@@ -185,7 +197,7 @@ function MenuContent({ data, slug }) {
                       <div style={{position:"absolute",inset:0,background:"linear-gradient(to top, rgba(0,0,0,.82) 0%, rgba(0,0,0,.25) 50%, transparent 100%)",padding:"12px 14px",display:"flex",flexDirection:"column",justifyContent:"flex-end"}}>
                         {b.title && <p className="text-white font-display font-bold leading-tight" style={{fontSize:15,margin:0,textShadow:"0 1px 4px rgba(0,0,0,.6)"}}>{b.title}</p>}
                         {b.subtitle && <p style={{color:"rgba(255,255,255,.8)",fontSize:11,margin:"3px 0 0",textShadow:"0 1px 3px rgba(0,0,0,.5)"}}>{b.subtitle}</p>}
-                        {linked && <span className="mt-2 text-xs font-bold px-2 py-0.5 rounded-full w-fit" style={{background:accent,color:hexFg(accent)}}>Ver produto →</span>}
+                        {linked && <span className="mt-2 text-xs font-bold px-2 py-0.5 rounded-full w-fit" style={{background:accent,color:buttonTextColor}}>Ver produto →</span>}
                       </div>
                     )}
                   </div>
@@ -197,8 +209,8 @@ function MenuContent({ data, slug }) {
           {/* Combos */}
           {combos && combos.length > 0 && (
             <div className="mt-5 px-4">
-              <h2 className="font-display font-bold text-base text-white mb-3 flex items-center gap-2">
-                <span style={{color:accent}}>🔥</span> Combos Especiais
+              <h2 className="font-display font-bold text-base mb-3 flex items-center gap-2" style={textStyle}>
+                <span style={{color:detailColor}}>🔥</span> Combos Especiais
               </h2>
               <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-1">
                 {combos.map(combo => (
@@ -207,11 +219,11 @@ function MenuContent({ data, slug }) {
                       ? <img src={combo.image_url} alt={combo.name} className="w-full h-28 object-cover"/>
                       : <div className="w-full h-28 grid place-items-center bg-[#1A1A1A] text-3xl">🍱</div>}
                     <div className="p-3">
-                      <p className="font-display font-bold text-sm text-white">{combo.name}</p>
+                      <p className="font-display font-bold text-sm" style={textStyle}>{combo.name}</p>
                       <div className="flex items-center justify-between mt-2">
                         <span className="font-display font-bold text-sm" style={{color:accent}}>{brl(combo.price)}</span>
                         <button onClick={() => addItem({id:combo.id,name:combo.name,price:combo.price,image_url:combo.image_url,description:combo.description,is_available:true,option_groups:[]},1,[])}
-                          className="w-8 h-8 rounded-full grid place-items-center" style={{background:accent,color:hexFg(accent)}}>
+                          className="w-8 h-8 rounded-full grid place-items-center" style={{background:accent,color:buttonTextColor}}>
                           <Plus className="w-4 h-4"/>
                         </button>
                       </div>
@@ -235,8 +247,8 @@ function MenuContent({ data, slug }) {
           <div className="flex overflow-x-auto gap-2 py-4 px-4 scrollbar-hide sticky top-0 z-20" style={{background:"#0A0A0A"}}>
             {grouped.map(g => (
               <button key={g.category.id} onClick={() => scrollToCat(g.category.id)}
-                className={`shrink-0 rounded-full px-4 py-2 text-sm font-medium transition-all border ${activeCat===g.category.id ? "text-black border-transparent" : "text-gray-400 bg-transparent border-white/20 hover:border-white/40"}`}
-                style={activeCat===g.category.id ? {background:accent, borderColor:accent} : {}}>
+                className={`shrink-0 rounded-full px-4 py-2 text-sm font-medium transition-all border ${activeCat===g.category.id ? "border-transparent" : "bg-transparent border-white/20 hover:border-white/40"}`}
+                style={activeCat===g.category.id ? {background:accent, borderColor:accent, color:buttonTextColor} : {color:mutedColor}}>
                 {g.category.icon && <span className="mr-1">{g.category.icon}</span>}
                 {g.category.name}
               </button>
@@ -250,8 +262,8 @@ function MenuContent({ data, slug }) {
             )}
             {grouped.map(g => (
               <div key={g.category.id} ref={el => sectionRefs.current[g.category.id] = el}>
-                <h2 className="font-display font-bold text-base text-white mb-4 flex items-center gap-2">
-                  {g.category.icon && <span style={{color:accent}}>{g.category.icon}</span>}
+                <h2 className="font-display font-bold text-base mb-4 flex items-center gap-2" style={textStyle}>
+                  {g.category.icon && <span style={{color:detailColor}}>{g.category.icon}</span>}
                   {g.category.name}
                 </h2>
                 <div className="space-y-3">
@@ -265,11 +277,11 @@ function MenuContent({ data, slug }) {
                             {p.is_best_seller && <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/30">⭐ Mais vendido</span>}
                             {promo && <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border" style={{background:`${accent}20`, color:accent, borderColor:`${accent}40`}}>Promoção</span>}
                           </div>
-                          <p className="font-display font-semibold text-sm text-white leading-tight">{p.name}</p>
-                          <p className="text-xs text-gray-500 line-clamp-2 mt-0.5">{p.description}</p>
+                          <p className="font-display font-semibold text-sm leading-tight" style={textStyle}>{p.name}</p>
+                          <p className="text-xs line-clamp-2 mt-0.5" style={mutedStyle}>{p.description}</p>
                           <div className="flex items-center gap-2 mt-2">
                             <span className="font-display font-bold text-sm" style={{color:accent}}>{brl(promo ? p.promotional_price : p.price)}</span>
-                            {promo && <span className="text-xs text-gray-600 line-through">{brl(p.price)}</span>}
+                            {promo && <span className="text-xs line-through" style={mutedStyle}>{brl(p.price)}</span>}
                           </div>
                           {!p.is_available && <span className="text-xs text-red-500 mt-1 block">Indisponível</span>}
                         </div>
@@ -278,7 +290,7 @@ function MenuContent({ data, slug }) {
                             <img src={p.image_url} alt={p.name} className="w-24 h-24 rounded-xl object-cover"/>
                             {p.is_available && (
                               <span className="absolute -bottom-1.5 -right-1.5 w-7 h-7 grid place-items-center rounded-full shadow-lg" style={{background:accent}}>
-                                <Plus className="w-4 h-4" style={{color:hexFg(accent)}}/>
+                                <Plus className="w-4 h-4" style={{color:buttonTextColor}}/>
                               </span>
                             )}
                           </div>
@@ -303,18 +315,18 @@ function MenuContent({ data, slug }) {
           ].filter(Boolean).map(([Icon, label, value]) => (
             <div key={label} className="bg-[#111] border border-white/10 rounded-xl p-3.5 flex items-center gap-3">
               <Icon className="w-4 h-4 shrink-0" style={{color:accent}}/>
-              <div><p className="text-xs text-gray-500">{label}</p><p className="text-sm font-medium text-white">{value}</p></div>
+              <div><p className="text-xs" style={mutedStyle}>{label}</p><p className="text-sm font-medium" style={textStyle}>{value}</p></div>
             </div>
           ))}
           {restaurant.opening_hours && (
             <div className="bg-[#111] border border-white/10 rounded-xl p-4">
-              <p className="text-xs text-gray-500 mb-3 flex items-center gap-2"><Clock className="w-4 h-4" style={{color:accent}}/> Horário de funcionamento</p>
+              <p className="text-xs mb-3 flex items-center gap-2" style={mutedStyle}><Clock className="w-4 h-4" style={{color:accent}}/> Horario de funcionamento</p>
               {Object.entries(DAY_LABELS).map(([k,label]) => {
                 const h = restaurant.opening_hours[k];
                 return (
                   <div key={k} className="flex justify-between text-sm py-1 border-b border-white/5 last:border-0">
-                    <span className="text-gray-500">{label}</span>
-                    <span className={`font-medium ${h?.open ? "text-white" : "text-gray-600"}`}>{h?.open ? `${h.start} – ${h.end}` : "Fechado"}</span>
+                    <span style={mutedStyle}>{label}</span>
+                    <span className="font-medium" style={h?.open ? textStyle : mutedStyle}>{h?.open ? `${h.start} - ${h.end}` : "Fechado"}</span>
                   </div>
                 );
               })}
@@ -323,14 +335,24 @@ function MenuContent({ data, slug }) {
         </div>
       )}
 
-      {tab === "avaliacoes" && <ReviewsTab slug={slug} reviews={reviews} summary={reviews_summary}/>}
+      {tab === "avaliacoes" && (
+        <ReviewsTab
+          slug={slug}
+          reviews={reviews}
+          summary={reviews_summary}
+          accent={detailColor}
+          textColor={textColor}
+          mutedColor={mutedColor}
+          buttonTextColor={buttonTextColor}
+        />
+      )}
 
       {/* Cart bar */}
       {count > 0 && (
         <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto p-4 z-50">
           <button onClick={() => setCartOpen(true)}
             className="w-full rounded-2xl h-14 flex items-center justify-between px-5 font-semibold text-base shadow-2xl transition-transform active:scale-[0.98]"
-            style={{background:accent, color:hexFg(accent)}}>
+            style={{background:accent, color:buttonTextColor}}>
             <span className="flex items-center gap-2"><ShoppingBag className="w-5 h-5"/> {count} {count===1?"item":"itens"}</span>
             <span>Ver pedido · {brl(subtotal)}</span>
           </button>
@@ -363,7 +385,28 @@ export default function MenuPage() {
 
   useEffect(() => {
     axios.get(`${API}/public/restaurants/${slug}`)
-      .then(res => { setData(res.data); document.title = `${res.data.restaurant.name} · Cardápio`; })
+      .then(res => {
+        setData(res.data);
+        const restaurant = res.data.restaurant;
+        const title = `${restaurant.name} - Cardapio`;
+        const description = restaurant.tagline || restaurant.description || "Cardapio digital EG Delivery";
+        document.title = title;
+        [
+          ["description", description],
+          ["og:title", title],
+          ["og:description", description],
+          ["twitter:title", title],
+          ["twitter:description", description],
+        ].forEach(([key, value]) => {
+          const selector = key.startsWith("og:") ? `meta[property="${key}"]` : `meta[name="${key}"]`;
+          document.querySelector(selector)?.setAttribute("content", value);
+        });
+        const image = restaurant.logo_url || restaurant.cover_url;
+        if (image) {
+          document.querySelector('meta[property="og:image"]')?.setAttribute("content", image);
+          document.querySelector('meta[name="twitter:image"]')?.setAttribute("content", image);
+        }
+      })
       .catch(() => setError(true));
   }, [slug]);
 
@@ -378,9 +421,17 @@ export default function MenuPage() {
     </div>
   );
 
-  const primary = data.restaurant.primary_color || "#D4AF37";
-  const secondary = data.restaurant.secondary_color || "#1A1A0A";
-  const style = { "--brand-primary": primary, "--brand-primary-foreground": hexFg(primary), "--brand-secondary": secondary };
+  const primary = data.restaurant.primary_color || "#22E39B";
+  const secondary = data.restaurant.secondary_color || primary;
+  const buttonText = data.restaurant.button_text_color || hexFg(primary);
+  const style = {
+    "--brand-primary": primary,
+    "--brand-primary-foreground": buttonText,
+    "--brand-secondary": hexRgba(primary, 0.16),
+    "--menu-text": data.restaurant.menu_text_color || "#FFFFFF",
+    "--menu-muted": data.restaurant.menu_muted_text_color || "#A7A7A7",
+    "--menu-detail": secondary,
+  };
 
   return (
     <div style={{...style, background:"#0A0A0A"}} className="font-body">

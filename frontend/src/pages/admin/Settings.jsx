@@ -75,6 +75,9 @@ export default function Settings() {
         logo_url: r.logo_url, cover_url: r.cover_url, whatsapp: r.whatsapp,
         phone: r.phone, address: r.address, city: r.city, state: r.state,
         primary_color: r.primary_color, secondary_color: r.secondary_color,
+        button_text_color: r.button_text_color,
+        menu_text_color: r.menu_text_color,
+        menu_muted_text_color: r.menu_muted_text_color,
         minimum_order: Number(r.minimum_order) || 0, average_delivery_time: r.average_delivery_time,
         accepts_delivery: r.accepts_delivery, accepts_pickup: r.accepts_pickup,
         delivery_fee_mode: r.delivery_fee_mode, flat_delivery_fee: Number(r.flat_delivery_fee) || 0,
@@ -255,27 +258,43 @@ export default function Settings() {
             <ImageUpload value={r.logo_url} onChange={(url) => set({ logo_url: url })} label="Logo" aspect="aspect-square" />
             <ImageUpload value={r.cover_url} onChange={(url) => set({ cover_url: url })} label="Imagem de capa" />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label className="dark:text-gray-200">Cor principal</Label>
-              <div className="flex gap-2 mt-1">
-                <input type="color" value={r.primary_color || "#D4AF37"}
-                  onChange={(e) => set({ primary_color: e.target.value })}
-                  data-testid="color-primary"
-                  className="h-10 w-14 rounded-lg border dark:border-gray-600 cursor-pointer" />
-                <Input value={r.primary_color || ""} onChange={(e) => set({ primary_color: e.target.value })}
-                  className="dark:bg-gray-800 dark:border-gray-600 dark:text-white" />
+          <div className="grid md:grid-cols-3 gap-3">
+            {[
+              ["primary_color", "Botoes e destaques", "#22E39B"],
+              ["secondary_color", "Detalhes e estrelas", "#F97316"],
+              ["button_text_color", "Texto dos botoes", "#04110C"],
+              ["menu_text_color", "Texto principal", "#FFFFFF"],
+              ["menu_muted_text_color", "Texto secundario", "#A7A7A7"],
+            ].map(([key, label, fallback]) => (
+              <div key={key}>
+                <Label className="dark:text-gray-200">{label}</Label>
+                <div className="flex gap-2 mt-1">
+                  <input
+                    type="color"
+                    value={r[key] || fallback}
+                    onChange={(e) => set({ [key]: e.target.value })}
+                    data-testid={key === "primary_color" ? "color-primary" : undefined}
+                    className="h-10 w-14 rounded-lg border dark:border-gray-600 cursor-pointer"
+                  />
+                  <Input
+                    value={r[key] || ""}
+                    placeholder={fallback}
+                    onChange={(e) => set({ [key]: e.target.value })}
+                    className="dark:bg-gray-800 dark:border-gray-600 dark:text-white"
+                  />
+                </div>
               </div>
-            </div>
-            <div>
-              <Label className="dark:text-gray-200">Cor secundária</Label>
-              <div className="flex gap-2 mt-1">
-                <input type="color" value={r.secondary_color || "#B8860B"}
-                  onChange={(e) => set({ secondary_color: e.target.value })}
-                  className="h-10 w-14 rounded-lg border dark:border-gray-600 cursor-pointer" />
-                <Input value={r.secondary_color || ""} onChange={(e) => set({ secondary_color: e.target.value })}
-                  className="dark:bg-gray-800 dark:border-gray-600 dark:text-white" />
-              </div>
+            ))}
+          </div>
+          <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 p-4">
+            <p className="text-sm font-semibold dark:text-white mb-3">Previa do cardapio</p>
+            <div className="rounded-2xl bg-[#0A0A0A] border border-white/10 p-4 max-w-sm">
+              <p className="text-xs mb-1" style={{ color: r.menu_muted_text_color || "#A7A7A7" }}>Categoria</p>
+              <p className="font-bold" style={{ color: r.menu_text_color || "#FFFFFF" }}>{r.name || "Nome da loja"}</p>
+              <p className="text-sm mt-1" style={{ color: r.menu_muted_text_color || "#A7A7A7" }}>{r.tagline || "Descricao curta do cardapio"}</p>
+              <button type="button" className="mt-4 px-4 py-2 rounded-xl text-sm font-bold" style={{ background: r.primary_color || "#22E39B", color: r.button_text_color || "#04110C" }}>
+                Exemplo de botao
+              </button>
             </div>
           </div>
         </TabsContent>

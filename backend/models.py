@@ -124,6 +124,9 @@ class RestaurantSettings(BaseModel):
     state: Optional[str] = None
     primary_color: Optional[str] = None
     secondary_color: Optional[str] = None
+    button_text_color: Optional[str] = None
+    menu_text_color: Optional[str] = None
+    menu_muted_text_color: Optional[str] = None
     is_open_manual: Optional[bool] = None
     accepts_delivery: Optional[bool] = None
     accepts_pickup: Optional[bool] = None

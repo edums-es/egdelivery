@@ -331,7 +331,7 @@ export default function CartSheet({ open, onOpenChange, restaurant, slug }) {
       }
       onOpenChange(nextOpen);
     }}>
-      <SheetContent side="bottom" className="max-w-md mx-auto rounded-t-2xl max-h-[92vh] overflow-y-auto p-0 dark" style={{background:"#111111",color:"#f0f0f0",borderColor:"rgba(255,255,255,0.1)"}}>
+      <SheetContent side="bottom" className="max-w-md mx-auto rounded-t-2xl max-h-[92vh] overflow-y-auto p-0 dark" style={{background:"#111111",color:"var(--menu-text, #f0f0f0)",borderColor:"rgba(255,255,255,0.1)"}}>
         <SheetHeader className="p-4 border-b sticky top-0 z-10" style={{background:"#111111",borderColor:"rgba(255,255,255,0.1)"}}>
           <SheetTitle className="font-display flex items-center gap-2">
             {step === "checkout" && (
@@ -389,7 +389,7 @@ export default function CartSheet({ open, onOpenChange, restaurant, slug }) {
                   <button
                     onClick={copyPixCode}
                     className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors"
-                    style={{background: copied ? "rgba(74,222,128,0.2)" : "rgba(212,175,55,0.15)", color: copied ? "#4ade80" : "#D4AF37", border: `1px solid ${copied ? "rgba(74,222,128,0.3)" : "rgba(212,175,55,0.3)"}`}}
+                    style={{background: copied ? "rgba(74,222,128,0.2)" : "var(--brand-secondary)", color: copied ? "#4ade80" : "var(--brand-primary)", border: `1px solid ${copied ? "rgba(74,222,128,0.3)" : "var(--brand-primary)"}`}}
                   >
                     <Copy className="w-3.5 h-3.5"/>
                     {copied ? "Copiado!" : "Copiar"}
@@ -484,11 +484,11 @@ export default function CartSheet({ open, onOpenChange, restaurant, slug }) {
             <div className="grid grid-cols-2 gap-2">
               {restaurant?.accepts_delivery && (
                 <button onClick={() => setType("delivery")} data-testid="type-delivery"
-                  className={`py-2.5 rounded-xl border text-sm font-medium transition-colors ${type === "delivery" ? "brand-bg border-transparent text-white" : "border-white/20 text-gray-300 hover:border-white/40"}`}>Entrega</button>
+                  className={`py-2.5 rounded-xl border text-sm font-medium transition-colors ${type === "delivery" ? "brand-bg border-transparent" : "border-white/20 text-gray-300 hover:border-white/40"}`}>Entrega</button>
               )}
               {restaurant?.accepts_pickup && (
                 <button onClick={() => setType("pickup")} data-testid="type-pickup"
-                  className={`py-2.5 rounded-xl border text-sm font-medium transition-colors ${type === "pickup" ? "brand-bg border-transparent text-white" : "border-white/20 text-gray-300 hover:border-white/40"}`}>Retirada</button>
+                  className={`py-2.5 rounded-xl border text-sm font-medium transition-colors ${type === "pickup" ? "brand-bg border-transparent" : "border-white/20 text-gray-300 hover:border-white/40"}`}>Retirada</button>
               )}
             </div>
 

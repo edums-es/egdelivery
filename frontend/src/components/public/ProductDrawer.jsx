@@ -76,7 +76,7 @@ export default function ProductDrawer({ product, open, onOpenChange, onAdd }) {
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerContent className="max-w-md mx-auto max-h-[92vh] flex flex-col dark" style={{background:"#111111",color:"#f0f0f0",borderColor:"rgba(255,255,255,0.1)"}}>
+      <DrawerContent className="max-w-md mx-auto max-h-[92vh] flex flex-col dark" style={{background:"#111111",color:"var(--menu-text, #f0f0f0)",borderColor:"rgba(255,255,255,0.1)"}}>
         <div className="overflow-y-auto flex-1 min-h-0">
           {product.image_url && (
             <img src={product.image_url} alt={product.name}
@@ -84,7 +84,7 @@ export default function ProductDrawer({ product, open, onOpenChange, onAdd }) {
           )}
           <DrawerHeader className="text-left">
             <DrawerTitle className="font-display text-xl">{product.name}</DrawerTitle>
-            <p className="text-sm text-gray-500">{product.description}</p>
+            <p className="text-sm" style={{color:"var(--menu-muted, #888)"}}>{product.description}</p>
             <p className="font-display font-bold text-lg brand-text mt-1">{brl(basePrice)}</p>
           </DrawerHeader>
 
@@ -95,7 +95,7 @@ export default function ProductDrawer({ product, open, onOpenChange, onAdd }) {
                 <div key={g.id} data-testid={`option-group-${g.id}`}>
                   <div className="flex items-center justify-between mb-2">
                     <h4 className="font-display font-semibold text-sm">{g.name}</h4>
-                    <span className="text-xs text-gray-400">
+                    <span className="text-xs" style={{color:"var(--menu-muted, #aaa)"}}>
                       {g.required ? "Obrigatório · " : ""}
                       {g.type === "single" ? "Escolha 1" : `Até ${g.max}`}
                     </span>
@@ -116,7 +116,7 @@ export default function ProductDrawer({ product, open, onOpenChange, onAdd }) {
                             </span>
                             {o.name}
                           </span>
-                          {o.price > 0 && <span className="text-gray-500">+ {brl(o.price)}</span>}
+                          {o.price > 0 && <span style={{color:"var(--menu-muted, #888)"}}>+ {brl(o.price)}</span>}
                         </button>
                       );
                     })}
