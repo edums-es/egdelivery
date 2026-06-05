@@ -153,14 +153,14 @@ export default function Settings() {
       const url = URL.createObjectURL(data);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "eg-delivery-print-agent.zip";
+      a.download = "eg-delivery-impressora-windows.zip";
       document.body.appendChild(a);
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-      toast.success("Agente de impressão baixado");
+      toast.success("Instalador Windows baixado");
     } catch {
-      toast.error("Erro ao baixar agente de impressão");
+      toast.error("Erro ao baixar instalador Windows");
     }
   };
 
@@ -535,7 +535,7 @@ export default function Settings() {
             <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 p-4 space-y-3">
               <div className="flex items-center gap-2">
                 <KeyRound className="w-4 h-4 text-emerald-500" />
-                <h3 className="font-semibold dark:text-white">Conexão do agente local</h3>
+                <h3 className="font-semibold dark:text-white">Vinculo do programa local</h3>
               </div>
               <div className="grid md:grid-cols-2 gap-3">
                 <div>
@@ -543,7 +543,7 @@ export default function Settings() {
                   <WebhookUrlCopy url={`${API}/print-agent/jobs/claim`} />
                 </div>
                 <div>
-                  <Label className="dark:text-gray-200">Token do agente</Label>
+                  <Label className="dark:text-gray-200">Token do programa</Label>
                   <div className="flex gap-2 items-center">
                     <code className="flex-1 text-xs bg-black/10 dark:bg-black/30 rounded px-2 py-1.5 truncate select-all dark:text-green-400 text-green-700">
                       {printing.printer_agent_token}
@@ -558,7 +558,7 @@ export default function Settings() {
                 </div>
               </div>
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                O agente deve rodar no computador conectado à impressora. Ele busca jobs com esse token e confirma a impressão.
+                Esse vinculo ja vai dentro do instalador baixado por esta loja. Use estes dados apenas para suporte tecnico.
               </p>
             </div>
 
@@ -569,23 +569,23 @@ export default function Settings() {
                     <MonitorDown className="w-5 h-5" />
                   </span>
                   <div>
-                    <h3 className="font-semibold text-gray-900 dark:text-white">Programa local da impressora</h3>
+                    <h3 className="font-semibold text-gray-900 dark:text-white">Instalador Windows da impressora</h3>
                     <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                      Baixe o pacote no computador que fica na loja e conectado à impressora. O ZIP já vem com o token desta loja.
+                      Baixe no computador da loja, instale o app e deixe o icone do EG Delivery ativo perto do relogio do Windows.
                     </p>
                   </div>
                 </div>
                 <Button onClick={downloadPrintAgent} className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl">
-                  <Download className="w-4 h-4 mr-1" /> Baixar agente
+                  <Download className="w-4 h-4 mr-1" /> Baixar instalador Windows
                 </Button>
               </div>
 
               <div className="grid md:grid-cols-4 gap-3 mt-4">
                 {[
-                  ["1", "Baixe e extraia o ZIP no PC da loja."],
-                  ["2", "Instale o Node.js LTS se ainda não tiver."],
-                  ["3", "Dê dois cliques em iniciar-agente.bat."],
-                  ["4", "Deixe a janela aberta durante a operação."],
+                  ["1", "Baixe e extraia o pacote no computador da loja."],
+                  ["2", "De dois cliques em Instalar EG Delivery Impressora."],
+                  ["3", "Finalize a instalacao e mantenha o app aberto na bandeja."],
+                  ["4", "Use Testar impressao para conferir a impressora."],
                 ].map(([step, text]) => (
                   <div key={step} className="rounded-xl bg-white/75 dark:bg-black/20 border border-white dark:border-emerald-900/60 p-3">
                     <span className="inline-grid place-items-center w-6 h-6 rounded-full bg-emerald-600 text-white text-xs font-bold mb-2">{step}</span>
@@ -594,7 +594,7 @@ export default function Settings() {
                 ))}
               </div>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-3">
-                Dica: se quiser usar uma impressora específica, liste os nomes com <code className="px-1 py-0.5 rounded bg-black/10 dark:bg-black/30">npm run printers</code> e edite o campo <code className="px-1 py-0.5 rounded bg-black/10 dark:bg-black/30">printer_name</code> no <code className="px-1 py-0.5 rounded bg-black/10 dark:bg-black/30">config.json</code>.
+                Normalmente nao precisa configurar nada. O programa fica na bandeja do Windows, mostra status da conexao e permite testar a impressora.
               </p>
             </div>
 

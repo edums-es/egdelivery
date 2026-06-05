@@ -1,32 +1,57 @@
-# EG Delivery Print Agent
+# EG Delivery Impressora
 
-Agente local para imprimir automaticamente pedidos aceitos no EG Delivery.
+Aplicativo Windows local para imprimir pedidos automaticamente quando o EG Delivery cria jobs de impressao.
 
-## Como usar no Windows
-
-1. No painel, abra `Configuracoes > Impressao`.
-2. Ative a automacao, configure o nome da impressora e copie o token do agente.
-3. No computador conectado a impressora, rode:
+## Desenvolvimento
 
 ```powershell
-$env:EG_PRINT_API="https://SEU_BACKEND/api"
-$env:EG_PRINT_TOKEN="TOKEN_COPIADO_NO_PAINEL"
-$env:EG_PRINTER_NAME="NOME EXATO DA IMPRESSORA"
+npm install
 npm start
 ```
 
-Para usar a impressora padrao do Windows, deixe `EG_PRINTER_NAME` vazio.
+Para rodar apenas o agente em terminal:
 
-Para listar impressoras instaladas:
+```powershell
+npm run agent
+```
+
+Para listar impressoras:
 
 ```powershell
 npm run printers
 ```
 
-## Variaveis
+## Configuracao
 
-- `EG_PRINT_API`: URL base da API, terminando em `/api`.
-- `EG_PRINT_TOKEN`: token gerado em `Configuracoes > Impressao`.
-- `EG_PRINTER_NAME`: nome da impressora no Windows. Opcional.
-- `EG_PRINT_POLL_MS`: intervalo de consulta. Padrao `5000`.
-- `EG_PRINT_AGENT_ID`: identificador do agente. Opcional.
+O app procura a configuracao da loja em:
+
+- `%APPDATA%\EG Delivery Impressora\config.json`
+- `config.egdelivery.json` ao lado do instalador/executavel
+- `config.json` no diretorio atual
+
+Exemplo:
+
+```json
+{
+  "api": "https://sua-api.com/api",
+  "token": "token-da-loja",
+  "printer_name": "",
+  "poll_ms": 5000,
+  "agent_id": "loja-print-agent"
+}
+```
+
+## Gerar instalador
+
+```powershell
+npm install
+npm run dist
+```
+
+O instalador sai em:
+
+```text
+print-agent/dist/EG Delivery Impressora Setup.exe
+```
+
+Depois disso, o endpoint do painel consegue incluir esse `.exe` no pacote baixado pela loja.

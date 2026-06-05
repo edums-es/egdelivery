@@ -29,6 +29,9 @@ next-env.d.ts
 /build
 dist/
 dist
+!print-agent/dist/
+print-agent/dist/*
+!print-agent/dist/EG Delivery Impressora Setup.exe
 
 # Environment files (comprehensive coverage)
 

@@ -254,6 +254,7 @@ async def download_print_agent(request: Request, user=Depends(require_restaurant
     printer_name = restaurant.get("printer_name") or ""
     root = Path(__file__).resolve().parent.parent
     agent_dir = root / "print-agent"
+    setup_exe = next(iter(sorted((agent_dir / "dist").glob("EG Delivery Impressora Setup*.exe"))), None)
     files = {
         "agent.js": agent_dir / "agent.js",
         "package.json": agent_dir / "package.json",
@@ -268,14 +269,106 @@ async def download_print_agent(request: Request, user=Depends(require_restaurant
         "agent_id": f"{restaurant.get('slug') or restaurant.get('id')}-print-agent",
     }
 
+    if setup_exe and setup_exe.exists():
+        install_bat = """@echo off
+title Instalar EG Delivery Impressora
+set "APPDATA_DIR=%APPDATA%\\EG Delivery Impressora"
+mkdir "%APPDATA_DIR%" >nul 2>nul
+copy /Y "%~dp0config.egdelivery.json" "%APPDATA_DIR%\\config.json" >nul
+start "" /wait "%~dp0EG Delivery Impressora Setup.exe"
+echo.
+echo EG Delivery Impressora instalado e vinculado a esta loja.
+pause
+"""
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+            z.write(setup_exe, "EG Delivery Impressora Setup.exe")
+            z.writestr("config.egdelivery.json", json.dumps(config, indent=2, ensure_ascii=False))
+            z.writestr("Instalar EG Delivery Impressora.bat", install_bat)
+            z.writestr("LEIA-ME-PRIMEIRO.txt", (
+                "EG Delivery - Instalador da Impressora\n\n"
+                "1. Extraia este ZIP no computador da loja conectado a impressora.\n"
+                "2. De dois cliques em: Instalar EG Delivery Impressora.bat\n"
+                "3. Confirme a instalacao do programa.\n"
+                "4. Pronto. O icone do EG Delivery ficara perto do relogio do Windows.\n\n"
+                "Dentro do programa, use Testar impressao para conferir a impressora.\n"
+                "Para suporte, abra Logs e suporte no icone da bandeja.\n"
+            ))
+        buf.seek(0)
+
+        headers = {"Content-Disposition": 'attachment; filename="eg-delivery-impressora-windows.zip"'}
+        return StreamingResponse(buf, media_type="application/zip", headers=headers)
+
+    install_ps1 = r"""$ErrorActionPreference = "Stop"
+$AppName = "EG Delivery Print Agent"
+$InstallDir = Join-Path $env:LOCALAPPDATA "EGDeliveryPrintAgent"
+$StartupDir = [Environment]::GetFolderPath("Startup")
+$ShortcutPath = Join-Path $StartupDir "EG Delivery Impressora.lnk"
+$SourceDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+
+Write-Host "Instalando $AppName..." -ForegroundColor Green
+
+if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
+  Write-Host ""
+  Write-Host "Node.js LTS nao encontrado neste computador." -ForegroundColor Yellow
+  Write-Host "Vou abrir a pagina oficial. Instale o Node.js LTS e rode este instalador novamente."
+  Start-Process "https://nodejs.org/pt/download"
+  Read-Host "Depois de instalar o Node.js, pressione Enter para fechar"
+  exit 1
+}
+
+New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
+Copy-Item -LiteralPath (Join-Path $SourceDir "agent.js") -Destination $InstallDir -Force
+Copy-Item -LiteralPath (Join-Path $SourceDir "package.json") -Destination $InstallDir -Force
+Copy-Item -LiteralPath (Join-Path $SourceDir "config.json") -Destination $InstallDir -Force
+
+$Runner = @"
+`$ErrorActionPreference = "Continue"
+Set-Location "$InstallDir"
+node agent.js *> "$InstallDir\agent.log"
+"@
+Set-Content -LiteralPath (Join-Path $InstallDir "rodar-agente.ps1") -Value $Runner -Encoding UTF8
+
+$Uninstall = @"
+`$Startup = [Environment]::GetFolderPath("Startup")
+Remove-Item -LiteralPath (Join-Path `$Startup "EG Delivery Impressora.lnk") -Force -ErrorAction SilentlyContinue
+Get-CimInstance Win32_Process | Where-Object { `$_.CommandLine -like "*EGDeliveryPrintAgent*" } | ForEach-Object { Stop-Process -Id `$_.ProcessId -Force -ErrorAction SilentlyContinue }
+Remove-Item -LiteralPath "$InstallDir" -Recurse -Force -ErrorAction SilentlyContinue
+Write-Host "EG Delivery Print Agent removido."
+Read-Host "Pressione Enter para fechar"
+"@
+Set-Content -LiteralPath (Join-Path $InstallDir "desinstalar.ps1") -Value $Uninstall -Encoding UTF8
+
+$Shell = New-Object -ComObject WScript.Shell
+$Shortcut = $Shell.CreateShortcut($ShortcutPath)
+$Shortcut.TargetPath = "powershell.exe"
+$Shortcut.Arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Minimized -File `"$InstallDir\rodar-agente.ps1`""
+$Shortcut.WorkingDirectory = $InstallDir
+$Shortcut.Description = "EG Delivery Print Agent"
+$Shortcut.Save()
+
+Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like "*EGDeliveryPrintAgent*" } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Minimized -File `"$InstallDir\rodar-agente.ps1`"" -WorkingDirectory $InstallDir -WindowStyle Minimized
+
+Write-Host ""
+Write-Host "Instalacao concluida." -ForegroundColor Green
+Write-Host "O agente vai iniciar junto com o Windows e imprimir pedidos automaticamente."
+Write-Host "Logs: $InstallDir\agent.log"
+Read-Host "Pressione Enter para fechar"
+"""
+    install_bat = """@echo off
+title Instalar EG Delivery Impressora
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0instalar-eg-delivery-impressora.ps1"
+"""
     start_ps1 = """$ErrorActionPreference = "Stop"
+Set-Location $PSScriptRoot
 Write-Host "Iniciando EG Delivery Print Agent..." -ForegroundColor Green
 node agent.js
 Read-Host "Pressione Enter para fechar"
 """
     start_bat = """@echo off
 title EG Delivery Print Agent
-powershell -ExecutionPolicy Bypass -File "%~dp0start-windows.ps1"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0iniciar-sem-instalar.ps1"
 """
 
     buf = io.BytesIO()
@@ -284,20 +377,22 @@ powershell -ExecutionPolicy Bypass -File "%~dp0start-windows.ps1"
             if path.exists():
                 z.write(path, arcname)
         z.writestr("config.json", json.dumps(config, indent=2, ensure_ascii=False))
-        z.writestr("start-windows.ps1", start_ps1)
-        z.writestr("iniciar-agente.bat", start_bat)
+        z.writestr("instalar-eg-delivery-impressora.ps1", install_ps1)
+        z.writestr("Instalar EG Delivery Impressora.bat", install_bat)
+        z.writestr("iniciar-sem-instalar.ps1", start_ps1)
+        z.writestr("Iniciar sem instalar.bat", start_bat)
         z.writestr("LEIA-ME-PRIMEIRO.txt", (
-            "EG Delivery - Agente de Impressao\n\n"
-            "1. Extraia este ZIP em uma pasta do computador conectado a impressora.\n"
-            "2. Instale o Node.js LTS se o computador ainda nao tiver Node.\n"
-            "3. Dê dois cliques em iniciar-agente.bat.\n"
-            "4. Deixe a janela aberta enquanto a loja estiver recebendo pedidos.\n\n"
-            "Para listar impressoras, abra PowerShell nesta pasta e rode: npm run printers\n"
-            "Se quiser uma impressora especifica, edite printer_name no config.json com o nome exato.\n"
+            "EG Delivery - Instalador da Impressora\n\n"
+            "1. Extraia este ZIP no computador da loja que fica conectado a impressora.\n"
+            "2. De dois cliques em: Instalar EG Delivery Impressora.bat\n"
+            "3. Se o instalador pedir Node.js, instale o Node.js LTS uma vez e rode este instalador novamente.\n"
+            "4. Pronto. O EG Delivery vai iniciar junto com o Windows e imprimir pedidos automaticamente.\n\n"
+            "Na maioria das lojas nao precisa configurar mais nada.\n"
+            "Para suporte, envie o arquivo de log em %LOCALAPPDATA%\\EGDeliveryPrintAgent\\agent.log\n"
         ))
     buf.seek(0)
 
-    headers = {"Content-Disposition": 'attachment; filename="eg-delivery-print-agent.zip"'}
+    headers = {"Content-Disposition": 'attachment; filename="eg-delivery-print-installer.zip"'}
     return StreamingResponse(buf, media_type="application/zip", headers=headers)
 
 
