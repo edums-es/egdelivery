@@ -188,6 +188,9 @@ function CaixaFecharModal({ caixa, movimentos, onClose, onConfirm }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function PDV() {
+  const [isMobilePdv, setIsMobilePdv] = useState(() =>
+    typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches
+  );
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState("all");
@@ -329,6 +332,14 @@ export default function PDV() {
     const interval = setInterval(pollPendingOrders, 5000);
     return () => clearInterval(interval);
   }, [pollPendingOrders]);
+
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 767px)");
+    const update = () => setIsMobilePdv(media.matches);
+    update();
+    media.addEventListener?.("change", update);
+    return () => media.removeEventListener?.("change", update);
+  }, []);
 
   const filteredProducts = products.filter((p) => {
     const matchCat =
@@ -486,6 +497,26 @@ export default function PDV() {
   };
 
   // ── Guards de caixa ──────────────────────────────────────────────────────
+  if (isMobilePdv) {
+    return (
+      <div className="min-h-[calc(100vh-96px)] grid place-items-center px-2 py-8">
+        <div className="w-full max-w-md rounded-2xl border border-orange-200 dark:border-orange-900/60 bg-white dark:bg-[#111111] p-6 text-center shadow-sm">
+          <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-orange-100 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400">
+            <Lock className="w-7 h-7" />
+          </div>
+          <h1 className="text-xl font-bold text-gray-900 dark:text-white">PDV disponivel apenas no computador</h1>
+          <p className="mt-2 text-sm leading-relaxed text-gray-500 dark:text-gray-400">
+            O PDV usa catalogo, carrinho, caixa e impressao em uma tela ampla. Acesse pelo navegador em um computador para operar com seguranca.
+          </p>
+          <div className="mt-5 rounded-xl bg-gray-50 dark:bg-gray-900/70 border border-gray-100 dark:border-gray-800 p-3 text-left">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">Disponivel no celular</p>
+            <p className="text-sm text-gray-600 dark:text-gray-300">Dashboard, pedidos, produtos e configuracoes continuam acessiveis pelo painel mobile.</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (caixaLoading) {
     return (
       <div className="flex items-center justify-center" style={{height:"calc(100vh - 108px)"}}>

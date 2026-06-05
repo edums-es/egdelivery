@@ -36,9 +36,12 @@ PRINTING_DEFAULTS = {
 def _find_windows_setup() -> Optional[Path]:
     here = Path(__file__).resolve()
     candidates = [
+        here.parent / "installers",
+        here.parent / "print-agent" / "dist",
         here.parents[1] / "print-agent" / "dist",
         here.parents[0] / "print-agent" / "dist",
         Path.cwd() / "print-agent" / "dist",
+        Path.cwd() / "installers",
         Path.cwd() / "dist",
     ]
     matches = []
