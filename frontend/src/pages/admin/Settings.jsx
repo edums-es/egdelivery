@@ -12,7 +12,7 @@ import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
 } from "@/components/ui/select";
 import ImageUpload from "@/components/admin/ImageUpload";
-import { Loader2, Plus, X, Save, Copy, Check } from "lucide-react";
+import { Loader2, Plus, X, Save, Copy, Check, Printer, RefreshCw, KeyRound, Activity, Download, MonitorDown } from "lucide-react";
 import { API } from "@/lib/api";
 
 const PAYMENT_OPTIONS = ["Pix", "Dinheiro", "Cartão de crédito", "Cartão de débito", "Vale refeição"];
@@ -44,13 +44,28 @@ const joinList = (value) => Array.isArray(value) ? value.join(", ") : (value || 
 /* shared panel class */
 const PANEL = "bg-white dark:bg-[#111111] rounded-2xl border border-gray-200 dark:border-gray-700 p-5";
 
+const PRINT_TRIGGER_LABELS = {
+  pending: "Quando o pedido entrar",
+  accepted: "Quando o pedido for aceito",
+  preparing: "Quando entrar em preparo",
+  ready: "Quando ficar pronto",
+};
+
 export default function Settings() {
   const [r, setR] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [printing, setPrinting] = useState(null);
+  const [printJobs, setPrintJobs] = useState([]);
+  const [savingPrinting, setSavingPrinting] = useState(false);
 
   useEffect(() => { api.get("/admin/restaurant").then((res) => setR(res.data)); }, []);
+  useEffect(() => {
+    api.get("/admin/printing/settings").then((res) => setPrinting(res.data)).catch(() => {});
+    api.get("/admin/printing/jobs").then((res) => setPrintJobs(res.data)).catch(() => {});
+  }, []);
 
   const set = (patch) => setR((p) => ({ ...p, ...patch }));
+  const setPrint = (patch) => setPrinting((p) => ({ ...p, ...patch }));
 
   const save = async () => {
     setSaving(true);
@@ -93,7 +108,63 @@ export default function Settings() {
   const delZone = (id) =>
     set({ delivery_zones: r.delivery_zones.filter((z) => z.id !== id) });
 
-  if (!r) return (
+  const savePrinting = async () => {
+    setSavingPrinting(true);
+    try {
+      const payload = {
+        printing_enabled: !!printing.printing_enabled,
+        printing_trigger_status: printing.printing_trigger_status || "accepted",
+        printer_name: printing.printer_name || "",
+        printer_copies: Number(printing.printer_copies) || 1,
+        printer_include_customer_phone: !!printing.printer_include_customer_phone,
+        printer_include_address: !!printing.printer_include_address,
+        printer_include_payment: !!printing.printer_include_payment,
+      };
+      const { data } = await api.put("/admin/printing/settings", payload);
+      setPrinting(data);
+      toast.success("Configurações de impressão salvas");
+    } catch {
+      toast.error("Erro ao salvar impressão");
+    } finally {
+      setSavingPrinting(false);
+    }
+  };
+
+  const refreshPrintJobs = async () => {
+    const { data } = await api.get("/admin/printing/jobs");
+    setPrintJobs(data);
+  };
+
+  const regeneratePrintToken = async () => {
+    if (!window.confirm("Gerar um novo token desconecta agentes de impressão antigos. Continuar?")) return;
+    const { data } = await api.post("/admin/printing/token");
+    setPrint({ printer_agent_token: data.printer_agent_token });
+    toast.success("Token regenerado");
+  };
+
+  const copyText = async (text, label = "Copiado") => {
+    await navigator.clipboard.writeText(text);
+    toast.success(label);
+  };
+
+  const downloadPrintAgent = async () => {
+    try {
+      const { data } = await api.get("/admin/printing/agent/download", { responseType: "blob" });
+      const url = URL.createObjectURL(data);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "eg-delivery-print-agent.zip";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success("Agente de impressão baixado");
+    } catch {
+      toast.error("Erro ao baixar agente de impressão");
+    }
+  };
+
+  if (!r || !printing) return (
     <div className="grid place-items-center py-20">
       <Loader2 className="w-6 h-6 animate-spin text-gray-300" />
     </div>
@@ -119,6 +190,7 @@ export default function Settings() {
           <TabsTrigger value="horarios" data-testid="tab-horarios">Horários</TabsTrigger>
           <TabsTrigger value="entrega" data-testid="tab-entrega">Entrega</TabsTrigger>
           <TabsTrigger value="pagamento" data-testid="tab-pagamento">Pagamento</TabsTrigger>
+          <TabsTrigger value="impressao" data-testid="tab-impressao">Impressão</TabsTrigger>
         </TabsList>
 
         {/* ── Loja ── */}
@@ -382,6 +454,204 @@ export default function Settings() {
               </div>
             </div>
           )}
+        </TabsContent>
+
+        {/* Impressão */}
+        <TabsContent value="impressao" className="space-y-4">
+          <div className={`${PANEL} space-y-5`}>
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 grid place-items-center">
+                    <Printer className="w-5 h-5" />
+                  </span>
+                  <div>
+                    <h2 className="font-display font-bold text-lg dark:text-white">Impressão automática de pedidos</h2>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      Cria uma fila segura quando o pedido chega no status escolhido. O agente local imprime sem cliques.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <label className="flex items-center gap-3 rounded-xl border border-gray-200 dark:border-gray-700 px-4 py-3">
+                <Switch checked={!!printing.printing_enabled} onCheckedChange={(v) => setPrint({ printing_enabled: v })} />
+                <span>
+                  <span className="block text-sm font-semibold dark:text-white">Ativar automação</span>
+                  <span className="block text-xs text-gray-500 dark:text-gray-400">Usa impressora configurada no agente</span>
+                </span>
+              </label>
+            </div>
+
+            <div className="grid md:grid-cols-3 gap-4">
+              <div>
+                <Label className="dark:text-gray-200">Quando imprimir</Label>
+                <Select value={printing.printing_trigger_status || "accepted"} onValueChange={(v) => setPrint({ printing_trigger_status: v })}>
+                  <SelectTrigger className="mt-1 dark:bg-gray-800 dark:border-gray-600 dark:text-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="dark:bg-gray-800 dark:border-gray-700">
+                    {Object.entries(PRINT_TRIGGER_LABELS).map(([value, label]) => (
+                      <SelectItem key={value} value={value}>{label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="dark:text-gray-200">Nome da impressora</Label>
+                <Input
+                  value={printing.printer_name || ""}
+                  onChange={(e) => setPrint({ printer_name: e.target.value })}
+                  placeholder="Ex: EPSON TM-T20"
+                  className="mt-1 dark:bg-gray-800 dark:border-gray-600 dark:text-white"
+                />
+                <p className="text-xs text-gray-400 mt-1">Deixe vazio para usar a impressora padrão do Windows.</p>
+              </div>
+              <div>
+                <Label className="dark:text-gray-200">Cópias</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={5}
+                  value={printing.printer_copies || 1}
+                  onChange={(e) => setPrint({ printer_copies: e.target.value })}
+                  className="mt-1 dark:bg-gray-800 dark:border-gray-600 dark:text-white"
+                />
+              </div>
+            </div>
+
+            <div className="grid md:grid-cols-3 gap-3">
+              {[
+                ["printer_include_customer_phone", "Telefone do cliente"],
+                ["printer_include_address", "Endereço de entrega"],
+                ["printer_include_payment", "Forma de pagamento"],
+              ].map(([key, label]) => (
+                <label key={key} className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 dark:border-gray-700 px-4 py-3">
+                  <span className="text-sm font-medium dark:text-gray-200">{label}</span>
+                  <Switch checked={!!printing[key]} onCheckedChange={(v) => setPrint({ [key]: v })} />
+                </label>
+              ))}
+            </div>
+
+            <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <KeyRound className="w-4 h-4 text-emerald-500" />
+                <h3 className="font-semibold dark:text-white">Conexão do agente local</h3>
+              </div>
+              <div className="grid md:grid-cols-2 gap-3">
+                <div>
+                  <Label className="dark:text-gray-200">Endpoint</Label>
+                  <WebhookUrlCopy url={`${API}/print-agent/jobs/claim`} />
+                </div>
+                <div>
+                  <Label className="dark:text-gray-200">Token do agente</Label>
+                  <div className="flex gap-2 items-center">
+                    <code className="flex-1 text-xs bg-black/10 dark:bg-black/30 rounded px-2 py-1.5 truncate select-all dark:text-green-400 text-green-700">
+                      {printing.printer_agent_token}
+                    </code>
+                    <button onClick={() => copyText(printing.printer_agent_token, "Token copiado")} className="shrink-0 flex items-center gap-1 text-xs px-2 py-1.5 rounded border dark:border-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                      <Copy className="w-3.5 h-3.5" /> Copiar
+                    </button>
+                    <button onClick={regeneratePrintToken} className="shrink-0 flex items-center gap-1 text-xs px-2 py-1.5 rounded border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors">
+                      <RefreshCw className="w-3.5 h-3.5" /> Novo
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                O agente deve rodar no computador conectado à impressora. Ele busca jobs com esse token e confirma a impressão.
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50/70 dark:bg-emerald-950/20 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="flex items-start gap-3 max-w-2xl">
+                  <span className="w-10 h-10 rounded-xl bg-white dark:bg-black/20 text-emerald-600 dark:text-emerald-400 grid place-items-center shrink-0">
+                    <MonitorDown className="w-5 h-5" />
+                  </span>
+                  <div>
+                    <h3 className="font-semibold text-gray-900 dark:text-white">Programa local da impressora</h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                      Baixe o pacote no computador que fica na loja e conectado à impressora. O ZIP já vem com o token desta loja.
+                    </p>
+                  </div>
+                </div>
+                <Button onClick={downloadPrintAgent} className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl">
+                  <Download className="w-4 h-4 mr-1" /> Baixar agente
+                </Button>
+              </div>
+
+              <div className="grid md:grid-cols-4 gap-3 mt-4">
+                {[
+                  ["1", "Baixe e extraia o ZIP no PC da loja."],
+                  ["2", "Instale o Node.js LTS se ainda não tiver."],
+                  ["3", "Dê dois cliques em iniciar-agente.bat."],
+                  ["4", "Deixe a janela aberta durante a operação."],
+                ].map(([step, text]) => (
+                  <div key={step} className="rounded-xl bg-white/75 dark:bg-black/20 border border-white dark:border-emerald-900/60 p-3">
+                    <span className="inline-grid place-items-center w-6 h-6 rounded-full bg-emerald-600 text-white text-xs font-bold mb-2">{step}</span>
+                    <p className="text-xs leading-relaxed text-gray-600 dark:text-gray-300">{text}</p>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-3">
+                Dica: se quiser usar uma impressora específica, liste os nomes com <code className="px-1 py-0.5 rounded bg-black/10 dark:bg-black/30">npm run printers</code> e edite o campo <code className="px-1 py-0.5 rounded bg-black/10 dark:bg-black/30">printer_name</code> no <code className="px-1 py-0.5 rounded bg-black/10 dark:bg-black/30">config.json</code>.
+              </p>
+            </div>
+
+            <div className="flex justify-end">
+              <Button onClick={savePrinting} disabled={savingPrinting} className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl">
+                {savingPrinting ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Save className="w-4 h-4 mr-1" /> Salvar impressão</>}
+              </Button>
+            </div>
+          </div>
+
+          <div className={`${PANEL} space-y-3`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Activity className="w-4 h-4 text-gray-400" />
+                <h3 className="font-semibold dark:text-white">Fila recente</h3>
+              </div>
+              <Button size="sm" variant="outline" onClick={refreshPrintJobs} className="dark:border-gray-600 dark:text-gray-200">
+                <RefreshCw className="w-3.5 h-3.5 mr-1" /> Atualizar
+              </Button>
+            </div>
+            {printJobs.length === 0 ? (
+              <p className="text-sm text-gray-400 py-4 text-center">Nenhum job de impressão ainda.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-xs uppercase tracking-wide text-gray-400 border-b dark:border-gray-700">
+                      <th className="py-2">Pedido</th>
+                      <th>Status</th>
+                      <th>Motivo</th>
+                      <th>Tentativas</th>
+                      <th>Atualizado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {printJobs.slice(0, 12).map((job) => (
+                      <tr key={job.id} className="border-b border-gray-50 dark:border-gray-800 last:border-0">
+                        <td className="py-2 font-semibold dark:text-white">#{job.order_number}</td>
+                        <td>
+                          <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${
+                            job.status === "printed" ? "bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-400" :
+                            job.status === "failed" ? "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400" :
+                            "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400"
+                          }`}>
+                            {job.status}
+                          </span>
+                        </td>
+                        <td className="text-gray-500 dark:text-gray-400">{job.reason === "manual" ? "Manual" : "Automático"}</td>
+                        <td className="text-gray-500 dark:text-gray-400">{job.attempts || 0}</td>
+                        <td className="text-gray-500 dark:text-gray-400">{job.updated_at ? new Date(job.updated_at).toLocaleString("pt-BR") : "-"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </TabsContent>
       </Tabs>
     </div>

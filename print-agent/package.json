@@ -1,0 +1,11 @@
+{
+  "name": "eg-delivery-print-agent",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local print agent for EG Delivery automatic order printing.",
+  "main": "agent.js",
+  "scripts": {
+    "start": "node agent.js",
+    "printers": "node agent.js --list-printers"
+  }
+}

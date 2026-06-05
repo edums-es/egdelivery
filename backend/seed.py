@@ -46,6 +46,13 @@ async def create_restaurant_with_owner(
         "pix_key": "contato@burgerlanches.com",
         "pix_name": "Burger Lanches LTDA",
         "opening_hours": DEFAULT_OPENING_HOURS,
+        "printing_enabled": False,
+        "printing_trigger_status": "accepted",
+        "printer_name": "",
+        "printer_copies": 1,
+        "printer_include_customer_phone": True,
+        "printer_include_address": True,
+        "printer_include_payment": True,
         "plan": plan,
         "status": "active",
         "created_at": now_iso(),
@@ -187,6 +194,9 @@ async def seed():
     await db.products.create_index("restaurant_id")
     await db.categories.create_index("restaurant_id")
     await db.orders.create_index("restaurant_id")
+    await db.print_jobs.create_index("restaurant_id")
+    await db.print_jobs.create_index("dedupe_key", unique=True)
+    await db.print_jobs.create_index([("restaurant_id", 1), ("status", 1), ("created_at", 1)])
 
     # Super admin
     admin_email = os.environ.get("ADMIN_EMAIL", "super@menudigital.com").lower()

@@ -180,7 +180,7 @@ function KanbanColumn({ col, orders, onSelect, onStatusChange, collapsed, onTogg
 }
 
 // ── Detail modal ──────────────────────────────────────────────────────────
-function OrderModal({ order, onClose, onStatusChange }) {
+function OrderModal({ order, onClose, onStatusChange, onQueuePrint }) {
   if (!order) return null;
   const nexts = NEXT_STATUS[order.status] || [];
 
@@ -310,7 +310,10 @@ ${order.customer_notes ? `Obs: ${order.customer_notes}` : ""}
               </a>
             )}
             <Button variant="outline" className="flex-1" onClick={printOrder}>
-              <Printer className="w-4 h-4 mr-1" /> Imprimir
+              <Printer className="w-4 h-4 mr-1" /> Navegador
+            </Button>
+            <Button variant="outline" className="flex-1" onClick={() => onQueuePrint(order.id)}>
+              <Printer className="w-4 h-4 mr-1" /> Fila
             </Button>
           </div>
         </div>
@@ -400,6 +403,11 @@ export default function Orders() {
     toast.success(`Pedido → ${STATUS_LABEL[status]}`);
     load(true);
     if (selected?.id === id) setSelected((s) => s && { ...s, status });
+  };
+
+  const queuePrint = async (id) => {
+    await api.post(`/admin/orders/${id}/print`);
+    toast.success("Pedido enviado para a fila de impressão");
   };
 
   const filteredOrders = orders.filter((o) => {
@@ -516,6 +524,7 @@ export default function Orders() {
         order={selected}
         onClose={() => setSelected(null)}
         onStatusChange={updateStatus}
+        onQueuePrint={queuePrint}
       />
     </div>
   );
