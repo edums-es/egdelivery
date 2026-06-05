@@ -1,9 +1,10 @@
 """Public (customer-facing) menu endpoints — no auth required."""
 import logging
+import html
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 
 from db import db
 from whatsapp import send_whatsapp
@@ -30,6 +31,55 @@ async def _get_restaurant_or_404(slug: str):
     if not r or r.get("status") == "suspended":
         raise HTTPException(status_code=404, detail="Restaurante nao encontrado")
     return r
+
+
+def _absolute_url(value: str, request: Request) -> str:
+    if not value:
+        return ""
+    if value.startswith(("http://", "https://")):
+        return value
+    return str(request.base_url).rstrip("/") + "/" + value.lstrip("/")
+
+
+@router.get("/restaurants/{slug}/share", response_class=HTMLResponse)
+async def restaurant_share_preview(slug: str, request: Request):
+    r = await _get_restaurant_or_404(slug)
+    name = html.escape(r.get("name") or "EG Delivery")
+    description = html.escape(
+        r.get("tagline")
+        or r.get("description")
+        or "Acesse o cardapio digital e faca seu pedido online."
+    )
+    image = _absolute_url(r.get("cover_url") or r.get("logo_url") or "/logoeg.png", request)
+    url = str(request.base_url).rstrip("/") + f"/loja/{html.escape(slug)}"
+
+    return f"""<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{name}</title>
+    <meta name="description" content="{description}" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="{name}" />
+    <meta property="og:description" content="{description}" />
+    <meta property="og:image" content="{html.escape(image)}" />
+    <meta property="og:image:secure_url" content="{html.escape(image)}" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="600" />
+    <meta property="og:url" content="{url}" />
+    <meta property="og:site_name" content="EG Delivery" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="{name}" />
+    <meta name="twitter:description" content="{description}" />
+    <meta name="twitter:image" content="{html.escape(image)}" />
+    <link rel="canonical" href="{url}" />
+  </head>
+  <body>
+    <script>window.location.replace("{url}");</script>
+    <a href="{url}">Abrir cardapio</a>
+  </body>
+</html>"""
 
 
 @router.get("/restaurants/{slug}")
