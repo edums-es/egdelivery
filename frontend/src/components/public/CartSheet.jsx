@@ -17,6 +17,17 @@ import api, { formatApiError } from "@/lib/api";
 import { brl } from "@/lib/format";
 
 const onlyDigits = (value) => (value || "").replace(/\D/g, "");
+function hexFg(hex) {
+  if (!hex) return "#fff";
+  const c = hex.replace("#", "");
+  const r = parseInt(c.substr(0, 2), 16), g = parseInt(c.substr(2, 2), 16), b = parseInt(c.substr(4, 2), 16);
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.6 ? "#111" : "#fff";
+}
+function hexRgba(hex, alpha = 0.16) {
+  const c = (hex || "#22E39B").replace("#", "");
+  const r = parseInt(c.substr(0, 2), 16), g = parseInt(c.substr(2, 2), 16), b = parseInt(c.substr(4, 2), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
 const maskCep = (value) => {
   const digits = onlyDigits(value).slice(0, 8);
   return digits.length > 5 ? `${digits.slice(0, 5)}-${digits.slice(5)}` : digits;
@@ -100,6 +111,15 @@ export default function CartSheet({ open, onOpenChange, restaurant, slug }) {
 
   const discount = coupon?.discount || 0;
   const total = Math.max(0, subtotal + deliveryFee - discount);
+  const primary = restaurant?.primary_color || "#22E39B";
+  const themeVars = {
+    "--brand-primary": primary,
+    "--brand-primary-foreground": restaurant?.button_text_color || hexFg(primary),
+    "--brand-secondary": hexRgba(primary, 0.16),
+    "--menu-text": restaurant?.menu_text_color || "#FFFFFF",
+    "--menu-muted": restaurant?.menu_muted_text_color || "#A7A7A7",
+    "--menu-detail": restaurant?.secondary_color || primary,
+  };
 
   // Polling: verifica a cada 4s se Pix foi pago (usa endpoint ativo que consulta OpenPix)
   useEffect(() => {
@@ -331,7 +351,16 @@ export default function CartSheet({ open, onOpenChange, restaurant, slug }) {
       }
       onOpenChange(nextOpen);
     }}>
-      <SheetContent side="bottom" className="max-w-md mx-auto rounded-t-2xl max-h-[92vh] overflow-y-auto p-0 dark" style={{background:"#111111",color:"var(--menu-text, #f0f0f0)",borderColor:"rgba(255,255,255,0.1)"}}>
+      <SheetContent
+        side="bottom"
+        className="max-w-md mx-auto rounded-t-2xl max-h-[92vh] overflow-y-auto p-0 dark"
+        style={{
+          ...themeVars,
+          background:"#111111",
+          color:"var(--menu-text, #f0f0f0)",
+          borderColor:"rgba(255,255,255,0.1)",
+        }}
+      >
         <SheetHeader className="p-4 border-b sticky top-0 z-10" style={{background:"#111111",borderColor:"rgba(255,255,255,0.1)"}}>
           <SheetTitle className="font-display flex items-center gap-2">
             {step === "checkout" && (

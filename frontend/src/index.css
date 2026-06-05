@@ -32,9 +32,9 @@ body {
     --input: 214 32% 89%;
     --ring: 222 47% 11%;
     --radius: 0.75rem;
-    --brand-primary: #D4AF37;
-    --brand-primary-foreground: #0B0B0F;
-    --brand-secondary: #FDF4D4;
+    --brand-primary: #22E39B;
+    --brand-primary-foreground: #04110C;
+    --brand-secondary: rgba(34, 227, 155, 0.16);
   }
 
   .dark {
@@ -58,9 +58,6 @@ body {
     --input: 0 0% 18%;
     --ring: 0 0% 75%;
     color-scheme: dark;
-    --brand-primary: #D4AF37;
-    --brand-primary-foreground: #0B0B0F;
-    --brand-secondary: rgba(212, 175, 55, 0.15);
   }
 
   * { @apply border-border; }

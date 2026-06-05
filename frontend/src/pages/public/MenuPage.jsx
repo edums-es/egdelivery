@@ -86,6 +86,14 @@ function MenuContent({ data, slug }) {
   const buttonTextColor = restaurant.button_text_color || hexFg(accent);
   const textStyle = { color: textColor };
   const mutedStyle = { color: mutedColor };
+  const themeVars = {
+    "--brand-primary": accent,
+    "--brand-primary-foreground": buttonTextColor,
+    "--brand-secondary": hexRgba(accent, 0.16),
+    "--menu-text": textColor,
+    "--menu-muted": mutedColor,
+    "--menu-detail": detailColor,
+  };
 
   const filtered = useMemo(() => {
     if (!search.trim()) return products;
@@ -359,7 +367,7 @@ function MenuContent({ data, slug }) {
         </div>
       )}
 
-      <ProductDrawer product={selectedProduct} open={!!selectedProduct} onOpenChange={o => !o && setSelectedProduct(null)} onAdd={addItem}/>
+      <ProductDrawer product={selectedProduct} open={!!selectedProduct} onOpenChange={o => !o && setSelectedProduct(null)} onAdd={addItem} themeVars={themeVars}/>
       <CartSheet open={cartOpen} onOpenChange={setCartOpen} restaurant={restaurant} slug={slug}/>
 
       {/* Easy Growth footer */}
