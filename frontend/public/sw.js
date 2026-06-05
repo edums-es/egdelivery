@@ -1,4 +1,4 @@
-const CACHE = 'menuflow-v1';
+const CACHE = 'eg-delivery-v1';
 const ASSETS = ['/', '/admin', '/static/js/main.chunk.js'];
 self.addEventListener('install', e => e.waitUntil(caches.open(CACHE).then(c => c.addAll(['/']))));
 self.addEventListener('fetch', e => e.respondWith(

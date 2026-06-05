@@ -1,4 +1,4 @@
-# MenuFlow — Cardápio Digital & Delivery (SaaS multi-restaurante)
+# EG Delivery — Cardápio Digital & Delivery (SaaS multi-restaurante)
 
 ## Problem Statement
 Plataforma SaaS completa de cardápio digital e delivery para restaurantes. Cardápio público mobile-first (carrinho, checkout via WhatsApp + pedido interno), painel admin do restaurante (gestão completa) e super admin da plataforma.
