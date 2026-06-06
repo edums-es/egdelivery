@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import api, { formatApiError } from "@/lib/api";
 import { toast } from "sonner";
 import { brl } from "@/lib/format";
@@ -14,7 +14,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import ImageUpload from "@/components/admin/ImageUpload";
-import { Plus, Pencil, Trash2, UtensilsCrossed, X, Download, Upload } from "lucide-react";
+import { Plus, Pencil, Trash2, UtensilsCrossed, X, Download, Upload, Search, SlidersHorizontal } from "lucide-react";
 
 const EMPTY = {
   name: "", description: "", image_url: null, price: 0, promotional_price: null,
@@ -31,12 +31,35 @@ export default function Products() {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(EMPTY);
   const [editId, setEditId] = useState(null);
+  const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [availabilityFilter, setAvailabilityFilter] = useState("all");
 
   const load = () => {
     api.get("/admin/products").then((r) => setItems(Array.isArray(r.data) ? r.data : [])).catch(() => setItems([]));
     api.get("/admin/categories").then((r) => setCats(Array.isArray(r.data) ? r.data : [])).catch(() => setCats([]));
   };
   useEffect(() => { load(); }, []);
+
+  const filteredItems = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return items.filter((p) => {
+      const matchesSearch = !term
+        || String(p.name || "").toLowerCase().includes(term)
+        || String(p.description || "").toLowerCase().includes(term);
+      const matchesCategory = categoryFilter === "all"
+        || (categoryFilter === "uncategorized" ? !p.category_id : p.category_id === categoryFilter);
+      const matchesAvailability = availabilityFilter === "all"
+        || (availabilityFilter === "available" ? p.is_available : !p.is_available);
+      return matchesSearch && matchesCategory && matchesAvailability;
+    });
+  }, [items, search, categoryFilter, availabilityFilter]);
+
+  const clearFilters = () => {
+    setSearch("");
+    setCategoryFilter("all");
+    setAvailabilityFilter("all");
+  };
 
   const catName = (id) => cats.find((c) => c.id === id)?.name || "—";
 
@@ -124,14 +147,62 @@ export default function Products() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="font-display font-bold text-2xl dark:text-white">Produtos</h1>
         <div className="flex items-center gap-2">
-          <label className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors">
+          <label className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors">
             <Upload className="w-4 h-4" /> Importar Excel
             <input type="file" accept=".xlsx" className="hidden" onChange={importExcel} />
           </label>
-          <Button variant="outline" onClick={exportExcel} className="dark:border-gray-700 dark:text-gray-300">
+          <Button variant="outline" onClick={exportExcel} className="border-gray-200 text-gray-800 dark:border-gray-700 dark:text-gray-100">
             <Download className="w-4 h-4 mr-1.5" /> Exportar Excel
           </Button>
-          <Button onClick={openNew} data-testid="new-product-btn" className="bg-[#111827] dark:bg-indigo-600 rounded-xl text-white"><Plus className="w-4 h-4 mr-1" /> Novo produto</Button>
+          <Button onClick={openNew} data-testid="new-product-btn" className="bg-indigo-600 hover:bg-indigo-700 rounded-xl text-white"><Plus className="w-4 h-4 mr-1" /> Novo produto</Button>
+        </div>
+      </div>
+
+      <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-700 p-4 space-y-3">
+        <div className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200">
+          <SlidersHorizontal className="w-4 h-4 text-emerald-500" /> Filtros
+          <span className="text-xs font-normal text-gray-400">
+            {filteredItems.length} de {items.length} produtos
+          </span>
+        </div>
+        <div className="grid gap-3 lg:grid-cols-[1fr_220px_180px_auto]">
+          <div className="relative">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar por nome ou descricao"
+              className="pl-9 dark:bg-gray-950 dark:border-gray-700 dark:text-white"
+            />
+          </div>
+          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+            <SelectTrigger className="dark:bg-gray-950 dark:border-gray-700 dark:text-white">
+              <SelectValue placeholder="Categoria" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas as categorias</SelectItem>
+              <SelectItem value="uncategorized">Sem categoria</SelectItem>
+              {cats.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={availabilityFilter} onValueChange={setAvailabilityFilter}>
+            <SelectTrigger className="dark:bg-gray-950 dark:border-gray-700 dark:text-white">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos</SelectItem>
+              <SelectItem value="available">Disponiveis</SelectItem>
+              <SelectItem value="unavailable">Indisponiveis</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={clearFilters}
+            className="border-gray-200 text-gray-800 dark:border-gray-700 dark:text-gray-100"
+          >
+            Limpar
+          </Button>
         </div>
       </div>
 
@@ -140,9 +211,22 @@ export default function Products() {
           <UtensilsCrossed className="w-10 h-10 mx-auto mb-3 opacity-40" />
           <p>Você ainda não cadastrou nenhum produto. Comece adicionando o primeiro item do seu cardápio.</p>
         </div>
+      ) : filteredItems.length === 0 ? (
+        <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-700 p-12 text-center text-gray-400">
+          <Search className="w-10 h-10 mx-auto mb-3 opacity-40" />
+          <p>Nenhum produto encontrado com esses filtros.</p>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={clearFilters}
+            className="mt-4 border-gray-200 text-gray-800 dark:border-gray-700 dark:text-gray-100"
+          >
+            Limpar filtros
+          </Button>
+        </div>
       ) : (
         <div className="grid gap-3">
-          {items.map((p) => (
+          {filteredItems.map((p) => (
             <div key={p.id} className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-700 p-3 flex gap-3 items-center" data-testid={`product-row-${p.id}`}>
               <div className="w-16 h-16 rounded-xl bg-gray-100 overflow-hidden shrink-0">
                 {p.image_url && <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" />}
@@ -157,8 +241,8 @@ export default function Products() {
               </div>
               <div className="flex items-center gap-2">
                 <Switch checked={p.is_available} onCheckedChange={() => toggleAvailable(p)} data-testid={`toggle-available-${p.id}`} />
-                <Button size="icon" variant="ghost" onClick={() => openEdit(p)} data-testid={`edit-product-${p.id}`}><Pencil className="w-4 h-4" /></Button>
-                <Button size="icon" variant="ghost" onClick={() => remove(p.id)} className="text-red-500"><Trash2 className="w-4 h-4" /></Button>
+                <Button size="icon" variant="ghost" onClick={() => openEdit(p)} data-testid={`edit-product-${p.id}`} className="text-gray-700 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800"><Pencil className="w-4 h-4" /></Button>
+                <Button size="icon" variant="ghost" onClick={() => remove(p.id)} className="text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30"><Trash2 className="w-4 h-4" /></Button>
               </div>
             </div>
           ))}

@@ -74,6 +74,28 @@ async def create_category(data: CategoryIn, user=Depends(require_restaurant)):
     return clean(doc)
 
 
+@router.put("/categories/reorder")
+async def reorder_categories(data: dict, user=Depends(require_restaurant)):
+    category_ids = data.get("category_ids")
+    if not isinstance(category_ids, list) or not category_ids:
+        raise HTTPException(status_code=400, detail="Informe a ordem das categorias")
+
+    restaurant_id = rid(user)
+    existing = await db.categories.find(
+        {"restaurant_id": restaurant_id, "id": {"$in": category_ids}},
+        {"id": 1, "_id": 0},
+    ).to_list(500)
+    existing_ids = {c["id"] for c in existing}
+    ordered_ids = [cid for cid in category_ids if cid in existing_ids]
+
+    for index, cid in enumerate(ordered_ids, start=1):
+        await db.categories.update_one(
+            {"id": cid, "restaurant_id": restaurant_id},
+            {"$set": {"sort_order": index, "updated_at": now_iso()}},
+        )
+    return {"ok": True, "updated": len(ordered_ids)}
+
+
 @router.put("/categories/{cid}")
 async def update_category(cid: str, data: CategoryIn, user=Depends(require_restaurant)):
     res = await db.categories.update_one(
