@@ -3,9 +3,10 @@ import logging
 import html
 import os
 import json
+import asyncio
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from db import db
@@ -100,24 +101,55 @@ async def restaurant_share_preview(slug: str, request: Request):
 </html>"""
 
 
+@router.get("/restaurants/{slug}/identity")
+async def get_restaurant_identity(slug: str):
+    r = await db.restaurants.find_one(
+        {"slug": slug, "status": {"$ne": "suspended"}},
+        {
+            "_id": 0,
+            "id": 1,
+            "name": 1,
+            "slug": 1,
+            "logo_url": 1,
+            "cover_url": 1,
+            "primary_color": 1,
+            "secondary_color": 1,
+            "button_text_color": 1,
+            "menu_text_color": 1,
+            "menu_muted_text_color": 1,
+            "tagline": 1,
+            "description": 1,
+        },
+    )
+    if not r:
+        raise HTTPException(status_code=404, detail="Restaurante nao encontrado")
+    return JSONResponse(
+        r,
+        headers={"Cache-Control": "public, max-age=60, stale-while-revalidate=300"},
+    )
+
+
 @router.get("/restaurants/{slug}")
-async def get_menu(slug: str):
+async def get_menu(slug: str, response: Response):
+    response.headers["Cache-Control"] = "public, max-age=15, stale-while-revalidate=60"
     r = await _get_restaurant_or_404(slug)
-    categories = await db.categories.find(
-        {"restaurant_id": r["id"], "is_active": True}, {"_id": 0}
-    ).sort("sort_order", 1).to_list(200)
-    products = await db.products.find(
-        {"restaurant_id": r["id"]}, {"_id": 0}
-    ).sort("sort_order", 1).to_list(1000)
-    banners = await db.banners.find(
-        {"restaurant_id": r["id"], "is_active": True}, {"_id": 0}
-    ).sort("sort_order", 1).to_list(50)
-    combos = await db.combos.find(
-        {"restaurant_id": r["id"], "is_active": True}, {"_id": 0}
-    ).sort("sort_order", 1).to_list(100)
-    reviews = await db.reviews.find(
-        {"restaurant_id": r["id"]}, {"_id": 0}
-    ).sort("created_at", -1).to_list(200)
+    categories, products, banners, combos, reviews = await asyncio.gather(
+        db.categories.find(
+            {"restaurant_id": r["id"], "is_active": True}, {"_id": 0}
+        ).sort("sort_order", 1).to_list(200),
+        db.products.find(
+            {"restaurant_id": r["id"]}, {"_id": 0}
+        ).sort("sort_order", 1).to_list(1000),
+        db.banners.find(
+            {"restaurant_id": r["id"], "is_active": True}, {"_id": 0}
+        ).sort("sort_order", 1).to_list(50),
+        db.combos.find(
+            {"restaurant_id": r["id"], "is_active": True}, {"_id": 0}
+        ).sort("sort_order", 1).to_list(100),
+        db.reviews.find(
+            {"restaurant_id": r["id"]}, {"_id": 0}
+        ).sort("created_at", -1).to_list(200),
+    )
     avg = round(sum(rv["rating"] for rv in reviews) / len(reviews), 1) if reviews else 0
     restaurant = clean(r)
     restaurant["is_open"] = is_restaurant_open(r)
@@ -433,6 +465,7 @@ async def create_order(slug: str, order: OrderIn):
     doc.update({
         "id": new_id(),
         "restaurant_id": r["id"],
+        "customer_phone_suffix": "".join(ch for ch in (order.customer.phone or "") if ch.isdigit())[-8:],
         "order_number": order_number,
         "status": "pending",
         "payment_status": "pending",
@@ -625,7 +658,7 @@ async def track_order(order_id: str):
             "name": r.get("name", "") if r else "",
             "slug": r.get("slug", "") if r else "",
             "logo_url": r.get("logo_url") if r else None,
-            "primary_color": r.get("primary_color", "#EF4444") if r else "#EF4444",
+            "primary_color": r.get("primary_color", "#6B7280") if r else "#6B7280",
             "phone": r.get("phone") if r else None,
             "whatsapp": r.get("whatsapp") if r else None,
         },
@@ -705,15 +738,41 @@ async def track_by_phone(phone: str, slug: str = None):
     # Ex: busca "96717081" mas o banco tem "(27) 99671-7081" com traço e espacos
     suffix = raw[-8:]
     digit_pattern = "[^0-9]*".join(list(suffix))
-    query = {"customer.phone": {"$regex": digit_pattern}}
+    query = {"customer_phone_suffix": suffix}
+    slug_restaurant = None
     if slug:
-        r = await db.restaurants.find_one({"slug": slug}, {"id": 1, "_id": 0})
-        if r:
-            query["restaurant_id"] = r["id"]
+        slug_restaurant = await db.restaurants.find_one(
+            {"slug": slug}, {"id": 1, "name": 1, "slug": 1, "_id": 0}
+        )
+        if not slug_restaurant:
+            return []
+        query["restaurant_id"] = slug_restaurant["id"]
     orders = await db.orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(20)
+    if not orders:
+        legacy_query = {"customer.phone": {"$regex": digit_pattern}}
+        if query.get("restaurant_id"):
+            legacy_query["restaurant_id"] = query["restaurant_id"]
+        orders = await db.orders.find(legacy_query, {"_id": 0}).sort("created_at", -1).to_list(20)
+        if orders:
+            await db.orders.update_many(
+                {"id": {"$in": [o["id"] for o in orders]}},
+                {"$set": {"customer_phone_suffix": suffix}},
+            )
+
+    restaurants = {}
+    if slug_restaurant:
+        restaurants[slug_restaurant["id"]] = slug_restaurant
+    elif orders:
+        restaurant_ids = list({o["restaurant_id"] for o in orders})
+        restaurant_docs = await db.restaurants.find(
+            {"id": {"$in": restaurant_ids}},
+            {"id": 1, "name": 1, "slug": 1, "_id": 0},
+        ).to_list(len(restaurant_ids))
+        restaurants = {r["id"]: r for r in restaurant_docs}
+
     result = []
     for o in orders:
-        r = await db.restaurants.find_one({"id": o["restaurant_id"]}, {"name": 1, "slug": 1, "_id": 0})
+        r = restaurants.get(o["restaurant_id"])
         result.append({
             "id": o["id"],
             "order_number": o["order_number"],

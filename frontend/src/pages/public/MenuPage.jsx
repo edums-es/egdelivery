@@ -11,6 +11,7 @@ import {
   Plus, Loader2, Store, CheckCircle2, Info, ChefHat, ClipboardList,
 } from "lucide-react";
 import axios from "axios";
+import { cacheRestaurant } from "@/lib/publicRestaurantCache";
 
 /* ── helpers ── */
 function hexFg(hex) {
@@ -126,7 +127,7 @@ function MenuContent({ data, slug }) {
       {/* Cover */}
       <div className="relative w-full h-56 overflow-hidden">
         <img src={restaurant.cover_url || "https://images.pexels.com/photos/31124637/pexels-photo-31124637.jpeg"}
-          alt="capa" className="w-full h-full object-cover"/>
+          alt="capa" loading="eager" decoding="async" fetchPriority="high" className="w-full h-full object-cover"/>
         <div className="absolute inset-0 bg-gradient-to-t from-[#0A0A0A] via-black/30 to-transparent"/>
         <button onClick={share} className="absolute top-4 right-4 w-10 h-10 rounded-full bg-black/60 backdrop-blur grid place-items-center border border-white/20">
           <Share2 className="w-4 h-4 text-white"/>
@@ -138,7 +139,7 @@ function MenuContent({ data, slug }) {
         <div className="bg-[#111] border border-white/10 rounded-2xl p-4 flex gap-4 shadow-2xl">
           <div className="w-24 h-24 rounded-2xl overflow-hidden bg-[#1A1A1A] shrink-0 border border-white/10 grid place-items-center">
             {restaurant.logo_url
-              ? <img src={restaurant.logo_url} alt="logo" className="w-full h-full object-cover"/>
+              ? <img src={restaurant.logo_url} alt="logo" loading="eager" decoding="async" className="w-full h-full object-cover"/>
               : <Store className="w-10 h-10 text-gray-600"/>}
           </div>
           <div className="flex-1 min-w-0 pt-1">
@@ -199,6 +200,7 @@ function MenuContent({ data, slug }) {
                     className={`relative shrink-0 w-[85%] aspect-[2.25/1] rounded-xl overflow-hidden snap-start bg-black ${linked ? "cursor-pointer" : ""}`}>
                     {b.image_url
                       ? <img src={b.image_url} alt={b.title || ""}
+                          loading="lazy" decoding="async"
                           style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover",objectPosition:"center"}}/>
                       : <div style={{position:"absolute",inset:0,background:"#1A1A1A"}}/>}
                     {hasText && (
@@ -224,7 +226,7 @@ function MenuContent({ data, slug }) {
                 {combos.map(combo => (
                   <div key={combo.id} className="snap-start min-w-[200px] bg-[#111] border border-white/10 rounded-2xl overflow-hidden">
                     {combo.image_url
-                      ? <img src={combo.image_url} alt={combo.name} className="w-full h-28 object-cover"/>
+                      ? <img src={combo.image_url} alt={combo.name} loading="lazy" decoding="async" className="w-full h-28 object-cover"/>
                       : <div className="w-full h-28 grid place-items-center bg-[#1A1A1A] text-3xl">🍱</div>}
                     <div className="p-3">
                       <p className="font-display font-bold text-sm" style={textStyle}>{combo.name}</p>
@@ -295,7 +297,7 @@ function MenuContent({ data, slug }) {
                         </div>
                         {p.image_url && (
                           <div className="relative w-24 h-24 shrink-0">
-                            <img src={p.image_url} alt={p.name} className="w-24 h-24 rounded-xl object-cover"/>
+                            <img src={p.image_url} alt={p.name} loading="lazy" decoding="async" className="w-24 h-24 rounded-xl object-cover"/>
                             {p.is_available && (
                               <span className="absolute -bottom-1.5 -right-1.5 w-7 h-7 grid place-items-center rounded-full shadow-lg" style={{background:accent}}>
                                 <Plus className="w-4 h-4" style={{color:buttonTextColor}}/>
@@ -396,6 +398,7 @@ export default function MenuPage() {
       .then(res => {
         setData(res.data);
         const restaurant = res.data.restaurant;
+        cacheRestaurant(slug, restaurant);
         const title = `${restaurant.name} - Cardapio`;
         const description = restaurant.tagline || restaurant.description || "Cardapio digital EG Delivery";
         document.title = title;

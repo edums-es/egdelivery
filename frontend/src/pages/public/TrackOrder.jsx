@@ -65,7 +65,7 @@ export default function TrackOrder() {
 
   const isCancelled = order.status === "cancelled";
   const currentStep = isCancelled ? -1 : stepIndex(order.status);
-  const primary = order.restaurant?.primary_color || "#EF4444";
+  const primary = order.restaurant?.primary_color || "#6B7280";
   const currentLabel = STEPS[currentStep]?.label || "Pedido recebido";
 
   return (
@@ -75,6 +75,8 @@ export default function TrackOrder() {
           <img
             src={order.restaurant.logo_url}
             alt="logo"
+            loading="eager"
+            decoding="async"
             className="w-12 h-12 rounded-xl object-cover mx-auto mb-3 shadow-lg"
           />
         )}

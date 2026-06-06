@@ -3,6 +3,7 @@ import { useParams, useSearchParams, Link } from "react-router-dom";
 import axios from "axios";
 import { API } from "@/lib/api";
 import { brl } from "@/lib/format";
+import { cacheRestaurant, getCachedRestaurant } from "@/lib/publicRestaurantCache";
 import {
   Phone, Search, Clock, CheckCircle2, ChefHat, Package,
   Bike, Star, XCircle, Loader2, ChevronRight, Store,
@@ -111,16 +112,19 @@ export default function MyOrders() {
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   const [error, setError] = useState("");
-  const [restaurant, setRestaurant] = useState(null);
+  const [restaurant, setRestaurant] = useState(() => getCachedRestaurant(slug));
   const inputRef = useRef(null);
 
-  const primary = restaurant?.primary_color || "#EF4444";
+  const primary = restaurant?.primary_color || "#6B7280";
 
-  // Carrega dados do restaurante quando vem por slug
+  // Carrega apenas a identidade visual; o cardapio completo seria muito mais pesado.
   useEffect(() => {
     if (!slug) return;
-    axios.get(`${API}/public/restaurants/${slug}`)
-      .then(({ data }) => setRestaurant(data.restaurant))
+    axios.get(`${API}/public/restaurants/${slug}/identity`)
+      .then(({ data }) => {
+        setRestaurant(data);
+        cacheRestaurant(slug, data);
+      })
       .catch(() => {});
   }, [slug]);
 
@@ -169,6 +173,7 @@ export default function MyOrders() {
         <div className="max-w-md mx-auto">
           {restaurant?.logo_url
             ? <img src={restaurant.logo_url} alt={restaurant.name}
+                loading="eager" decoding="async" fetchPriority="high"
                 className="w-16 h-16 rounded-2xl object-cover mx-auto mb-3 shadow-lg" />
             : (
               <div className="w-16 h-16 rounded-2xl mx-auto mb-3 grid place-items-center"
