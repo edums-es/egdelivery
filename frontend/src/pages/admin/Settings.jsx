@@ -57,6 +57,7 @@ export default function Settings() {
   const [printing, setPrinting] = useState(null);
   const [printJobs, setPrintJobs] = useState([]);
   const [savingPrinting, setSavingPrinting] = useState(false);
+  const [downloadingPrintAgent, setDownloadingPrintAgent] = useState(false);
 
   useEffect(() => { api.get("/admin/restaurant").then((res) => setR(res.data)); }, []);
   useEffect(() => {
@@ -151,19 +152,43 @@ export default function Settings() {
   };
 
   const downloadPrintAgent = async () => {
+    if (downloadingPrintAgent) return;
+    setDownloadingPrintAgent(true);
+    const loadingToast = toast.loading("Preparando download do instalador...");
     try {
-      const { data } = await api.get("/admin/printing/agent/download", { responseType: "blob" });
+      const { data } = await api.get("/admin/printing/agent/download", {
+        responseType: "blob",
+        timeout: 180000,
+      });
+      if (data?.type?.includes("application/json")) {
+        const payload = JSON.parse(await data.text());
+        throw new Error(payload?.detail || "Nao foi possivel baixar o instalador.");
+      }
       const url = URL.createObjectURL(data);
       const a = document.createElement("a");
       a.href = url;
       a.download = "eg-delivery-impressora-windows.zip";
+      a.rel = "noopener";
       document.body.appendChild(a);
       a.click();
       a.remove();
-      URL.revokeObjectURL(url);
-      toast.success("Instalador Windows baixado");
-    } catch {
-      toast.error("Erro ao baixar instalador Windows");
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      toast.success("Instalador Windows baixado", { id: loadingToast });
+    } catch (err) {
+      let message = err?.message || "Erro ao baixar instalador Windows";
+      const responseData = err?.response?.data;
+      if (responseData instanceof Blob) {
+        try {
+          const text = await responseData.text();
+          const parsed = JSON.parse(text);
+          message = parsed?.detail || message;
+        } catch {}
+      } else if (err?.response?.data?.detail) {
+        message = err.response.data.detail;
+      }
+      toast.error(message, { id: loadingToast });
+    } finally {
+      setDownloadingPrintAgent(false);
     }
   };
 
@@ -594,8 +619,15 @@ export default function Settings() {
                     </p>
                   </div>
                 </div>
-                <Button onClick={downloadPrintAgent} className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl">
-                  <Download className="w-4 h-4 mr-1" /> Baixar instalador Windows
+                <Button
+                  type="button"
+                  onClick={downloadPrintAgent}
+                  disabled={downloadingPrintAgent}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl disabled:opacity-70"
+                >
+                  {downloadingPrintAgent
+                    ? <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> Baixando...</>
+                    : <><Download className="w-4 h-4 mr-1" /> Baixar instalador Windows</>}
                 </Button>
               </div>
 

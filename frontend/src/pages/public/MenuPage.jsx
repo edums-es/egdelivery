@@ -109,7 +109,7 @@ function MenuContent({ data, slug }) {
   const scrollToCat = (cid) => { setActiveCat(cid); sectionRefs.current[cid]?.scrollIntoView({ behavior:"smooth", block:"start" }); };
 
   const share = async () => {
-    const url = window.location.href;
+    const url = `${API}/public/restaurants/${slug}/share`;
     if (navigator.share) { try { await navigator.share({ title: restaurant.name, url }); } catch {} }
     else { navigator.clipboard.writeText(url); toast.success("Link copiado!"); }
   };

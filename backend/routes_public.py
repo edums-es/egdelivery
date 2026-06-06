@@ -1,6 +1,8 @@
 """Public (customer-facing) menu endpoints — no auth required."""
 import logging
 import html
+import os
+import json
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Request
@@ -41,6 +43,18 @@ def _absolute_url(value: str, request: Request) -> str:
     return str(request.base_url).rstrip("/") + "/" + value.lstrip("/")
 
 
+def _frontend_base_url(request: Request) -> str:
+    configured = os.environ.get("FRONTEND_URL") or os.environ.get("APP_URL")
+    if configured:
+        return configured.rstrip("/")
+
+    proto = request.headers.get("x-forwarded-proto") or request.url.scheme
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host") or request.url.netloc
+    if host.startswith("api."):
+        host = "app." + host[4:]
+    return f"{proto}://{host}".rstrip("/")
+
+
 @router.get("/restaurants/{slug}/share", response_class=HTMLResponse)
 async def restaurant_share_preview(slug: str, request: Request):
     r = await _get_restaurant_or_404(slug)
@@ -50,8 +64,11 @@ async def restaurant_share_preview(slug: str, request: Request):
         or r.get("description")
         or "Acesse o cardapio digital e faca seu pedido online."
     )
-    image = _absolute_url(r.get("cover_url") or r.get("logo_url") or "/logoeg.png", request)
-    url = str(request.base_url).rstrip("/") + f"/loja/{html.escape(slug)}"
+    frontend_base = _frontend_base_url(request)
+    image = _absolute_url(r.get("cover_url") or r.get("logo_url") or f"{frontend_base}/logoeg.png", request)
+    url = f"{frontend_base}/loja/{html.escape(slug)}"
+    safe_url = html.escape(url, quote=True)
+    redirect_url = json.dumps(url)
 
     return f"""<!doctype html>
 <html lang="pt-BR">
@@ -67,17 +84,18 @@ async def restaurant_share_preview(slug: str, request: Request):
     <meta property="og:image:secure_url" content="{html.escape(image)}" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="600" />
-    <meta property="og:url" content="{url}" />
+    <meta property="og:url" content="{safe_url}" />
     <meta property="og:site_name" content="EG Delivery" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="{name}" />
     <meta name="twitter:description" content="{description}" />
     <meta name="twitter:image" content="{html.escape(image)}" />
-    <link rel="canonical" href="{url}" />
+    <meta http-equiv="refresh" content="0;url={safe_url}" />
+    <link rel="canonical" href="{safe_url}" />
   </head>
   <body>
-    <script>window.location.replace("{url}");</script>
-    <a href="{url}">Abrir cardapio</a>
+    <script>window.location.replace({redirect_url});</script>
+    <a href="{safe_url}">Abrir cardapio</a>
   </body>
 </html>"""
 
