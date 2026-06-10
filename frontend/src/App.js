@@ -2,9 +2,11 @@ import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-route
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { ThemeProvider, ForceLightMode } from "@/context/ThemeContext";
+import { BrandProvider } from "@/context/BrandContext";
 
 import Landing from "@/pages/Landing";
 import LoginPage from "@/pages/LoginPage";
+import NotFound from "@/pages/NotFound";
 import MenuPage from "@/pages/public/MenuPage";
 import TrackOrder from "@/pages/public/TrackOrder";
 import MyOrders from "@/pages/public/MyOrders";
@@ -49,55 +51,57 @@ function Protected({ children, roles }) {
 function App() {
   return (
     <ThemeProvider>
-      <AuthProvider>
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<ForceLightMode><Landing /></ForceLightMode>} />
-            <Route path="/login" element={<ForceLightMode><LoginPage /></ForceLightMode>} />
-            <Route path="/loja/:slug" element={<ForceLightMode><MenuPage /></ForceLightMode>} />
-            <Route path="/pedido/:order_id" element={<ForceLightMode><TrackOrder /></ForceLightMode>} />
-            <Route path="/meus-pedidos" element={<ForceLightMode><MyOrders /></ForceLightMode>} />
-            <Route path="/meus-pedidos/:slug" element={<ForceLightMode><MyOrders /></ForceLightMode>} />
+      <BrandProvider>
+        <AuthProvider>
+          <BrowserRouter>
+            <Routes>
+              <Route path="/" element={<ForceLightMode><Landing /></ForceLightMode>} />
+              <Route path="/login" element={<ForceLightMode><LoginPage /></ForceLightMode>} />
+              <Route path="/loja/:slug" element={<ForceLightMode><MenuPage /></ForceLightMode>} />
+              <Route path="/pedido/:order_id" element={<ForceLightMode><TrackOrder /></ForceLightMode>} />
+              <Route path="/meus-pedidos" element={<ForceLightMode><MyOrders /></ForceLightMode>} />
+              <Route path="/meus-pedidos/:slug" element={<ForceLightMode><MyOrders /></ForceLightMode>} />
 
-            <Route path="/supermaster" element={<Protected roles={["owner","manager","attendant","kitchen"]}><AdminLayout /></Protected>}>
-              <Route index element={<Dashboard />} />
-              <Route path="pdv" element={<PDV />} />
-              <Route path="caixa" element={<Navigate to="/supermaster/pdv" replace />} />
-              <Route path="pedidos" element={<Orders />} />
-              <Route path="produtos" element={<Products />} />
-              <Route path="categorias" element={<Categories />} />
-              <Route path="combos" element={<Combos />} />
-              <Route path="estoque" element={<Stock />} />
-              <Route path="fornecedores" element={<Suppliers />} />
-              <Route path="mesas" element={<Tables />} />
-              <Route path="clientes" element={<Customers />} />
-              <Route path="fidelidade" element={<Loyalty />} />
-              <Route path="atacado" element={<Wholesale />} />
-              <Route path="cupons" element={<Coupons />} />
-              <Route path="banners" element={<Banners />} />
-              <Route path="relatorios" element={<Reports />} />
-              <Route path="whatsapp" element={<WhatsApp />} />
-              <Route path="configuracoes" element={<Settings />} />
-            </Route>
+              <Route path="/supermaster" element={<Protected roles={["owner","manager","attendant","kitchen"]}><AdminLayout /></Protected>}>
+                <Route index element={<Dashboard />} />
+                <Route path="pdv" element={<PDV />} />
+                <Route path="caixa" element={<Navigate to="/supermaster/pdv" replace />} />
+                <Route path="pedidos" element={<Orders />} />
+                <Route path="produtos" element={<Products />} />
+                <Route path="categorias" element={<Categories />} />
+                <Route path="combos" element={<Combos />} />
+                <Route path="estoque" element={<Stock />} />
+                <Route path="fornecedores" element={<Suppliers />} />
+                <Route path="mesas" element={<Tables />} />
+                <Route path="clientes" element={<Customers />} />
+                <Route path="fidelidade" element={<Loyalty />} />
+                <Route path="atacado" element={<Wholesale />} />
+                <Route path="cupons" element={<Coupons />} />
+                <Route path="banners" element={<Banners />} />
+                <Route path="relatorios" element={<Reports />} />
+                <Route path="whatsapp" element={<WhatsApp />} />
+                <Route path="configuracoes" element={<Settings />} />
+              </Route>
 
-            <Route path="/super" element={<Protected roles={["super_admin"]}><SuperLayout /></Protected>}>
-              <Route index element={<SuperDashboard />} />
-              <Route path="restaurantes" element={<Restaurants />} />
-              <Route path="usuarios" element={<Users />} />
-              <Route path="planos" element={<Plans />} />
-              <Route path="ativacoes" element={<Activations />} />
-              <Route path="mensalidades" element={<Billing />} />
-              <Route path="alertas" element={<Alerts />} />
-              <Route path="afiliados" element={<Affiliates />} />
-              <Route path="revenda" element={<Resellers />} />
-              <Route path="configuracoes" element={<PlatformSettings />} />
-            </Route>
+              <Route path="/super" element={<Protected roles={["super_admin"]}><SuperLayout /></Protected>}>
+                <Route index element={<SuperDashboard />} />
+                <Route path="restaurantes" element={<Restaurants />} />
+                <Route path="usuarios" element={<Users />} />
+                <Route path="planos" element={<Plans />} />
+                <Route path="ativacoes" element={<Activations />} />
+                <Route path="mensalidades" element={<Billing />} />
+                <Route path="alertas" element={<Alerts />} />
+                <Route path="afiliados" element={<Affiliates />} />
+                <Route path="revenda" element={<Resellers />} />
+                <Route path="configuracoes" element={<PlatformSettings />} />
+              </Route>
 
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-          <Toaster position="top-center" richColors />
-        </BrowserRouter>
-      </AuthProvider>
+              <Route path="*" element={<ForceLightMode><NotFound /></ForceLightMode>} />
+            </Routes>
+            <Toaster position="top-center" richColors />
+          </BrowserRouter>
+        </AuthProvider>
+      </BrandProvider>
     </ThemeProvider>
   );
 }

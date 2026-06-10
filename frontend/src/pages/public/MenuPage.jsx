@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, useMemo } from "react";
 import { useParams, Link } from "react-router-dom";
 import { toast } from "sonner";
 import { CartProvider, useCart } from "@/context/CartContext";
+import { useBrand } from "@/context/BrandContext";
 import api, { API } from "@/lib/api";
 import { brl } from "@/lib/format";
 import ProductDrawer from "@/components/public/ProductDrawer";
@@ -30,6 +31,93 @@ function hexRgba(hex, alpha = 0.18) {
 const DAY_LABELS = {mon:"Segunda",tue:"Terça",wed:"Quarta",thu:"Quinta",fri:"Sexta",sat:"Sábado",sun:"Domingo"};
 
 /* ── Sub-components ── */
+const LOCATION_CACHE_KEY = "dino-menu-customer-region";
+const LOCATION_CACHE_TTL = 24 * 60 * 60 * 1000;
+
+function RegionalPromo({ accent, buttonTextColor }) {
+  const [location, setLocation] = useState(null);
+  const [status, setStatus] = useState("loading");
+
+  const saveLocation = (nextLocation) => {
+    if (!nextLocation?.region) return false;
+    setLocation(nextLocation);
+    setStatus("ready");
+    localStorage.setItem(
+      LOCATION_CACHE_KEY,
+      JSON.stringify({ location: nextLocation, savedAt: Date.now() }),
+    );
+    return true;
+  };
+
+  const resolveLocation = async (coords) => {
+    try {
+      const { data } = await api.get("/public/location", {
+        params: coords ? { lat: coords.latitude, lon: coords.longitude } : undefined,
+      });
+      return saveLocation(data);
+    } catch {
+      return false;
+    }
+  };
+
+  const requestLocation = () => {
+    setStatus("loading");
+    if (!navigator.geolocation) {
+      resolveLocation().then((found) => !found && setStatus("idle"));
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => resolveLocation(coords).then((found) => !found && setStatus("idle")),
+      () => resolveLocation().then((found) => !found && setStatus("idle")),
+      { enableHighAccuracy: false, timeout: 9000, maximumAge: LOCATION_CACHE_TTL },
+    );
+  };
+
+  useEffect(() => {
+    try {
+      const cached = JSON.parse(localStorage.getItem(LOCATION_CACHE_KEY) || "null");
+      if (cached?.location?.region && Date.now() - cached.savedAt < LOCATION_CACHE_TTL) {
+        setLocation(cached.location);
+        setStatus("ready");
+        return;
+      }
+    } catch {}
+
+    requestLocation();
+    // Location is intentionally resolved once per menu visit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const label = location?.neighborhood
+    ? `${location.neighborhood}, ${location.city || location.state || ""}`.replace(/, $/, "")
+    : location?.region;
+
+  return (
+    <button
+      type="button"
+      onClick={status === "ready" ? undefined : requestLocation}
+      className="absolute left-4 top-4 z-10 max-w-[calc(100%-5rem)] rounded-full border px-3 py-2 text-left shadow-lg backdrop-blur-md transition-colors"
+      style={{
+        background: status === "ready" ? hexRgba(accent, 0.88) : "rgba(0,0,0,.68)",
+        borderColor: status === "ready" ? accent : "rgba(255,255,255,.22)",
+        color: status === "ready" ? buttonTextColor : "#fff",
+        boxShadow: status === "ready" ? `0 6px 22px ${hexRgba(accent, 0.42)}` : "0 6px 18px rgba(0,0,0,.3)",
+      }}
+      data-testid="regional-promo"
+    >
+      <span className="flex items-center gap-2">
+        {status === "loading"
+          ? <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+          : <MapPin className="h-3.5 w-3.5 shrink-0" />}
+        <span className="truncate text-[11px] font-bold">
+          {status === "ready" ? `Ofertas Exclusivas em ${label}` : status === "loading" ? "Identificando sua regiao..." : "Usar minha localizacao"}
+        </span>
+      </span>
+    </button>
+  );
+}
+
 function ReviewsTab({ slug, reviews, summary, accent, textColor = "#FFFFFF", mutedColor = "#A7A7A7", buttonTextColor = "#04110C" }) {
   const [list, setList] = useState(reviews);
   const [name, setName] = useState(""); const [rating, setRating] = useState(5); const [comment, setComment] = useState("");
@@ -72,6 +160,7 @@ function ReviewsTab({ slug, reviews, summary, accent, textColor = "#FFFFFF", mut
 
 /* ── Main MenuContent ── */
 function MenuContent({ data, slug }) {
+  const { brand } = useBrand();
   const { restaurant, categories, products, banners, combos, reviews, reviews_summary } = data;
   const { count, subtotal, addItem } = useCart();
   const [tab, setTab] = useState("cardapio");
@@ -123,12 +212,12 @@ function MenuContent({ data, slug }) {
 
   return (
     <div className="eg-menu w-full max-w-md mx-auto min-h-screen relative pb-32" style={{background:"#0A0A0A", color:textColor}}>
-
       {/* Cover */}
       <div className="relative w-full h-56 overflow-hidden">
         <img src={restaurant.cover_url || "https://images.pexels.com/photos/31124637/pexels-photo-31124637.jpeg"}
           alt="capa" loading="eager" decoding="async" fetchPriority="high" className="w-full h-full object-cover"/>
         <div className="absolute inset-0 bg-gradient-to-t from-[#0A0A0A] via-black/30 to-transparent"/>
+        <RegionalPromo accent={accent} buttonTextColor={buttonTextColor} />
         <button onClick={share} className="absolute top-4 right-4 w-10 h-10 rounded-full bg-black/60 backdrop-blur grid place-items-center border border-white/20">
           <Share2 className="w-4 h-4 text-white"/>
         </button>
@@ -370,26 +459,22 @@ function MenuContent({ data, slug }) {
       )}
 
       <ProductDrawer product={selectedProduct} open={!!selectedProduct} onOpenChange={o => !o && setSelectedProduct(null)} onAdd={addItem} themeVars={themeVars}/>
-      <CartSheet open={cartOpen} onOpenChange={setCartOpen} restaurant={restaurant} slug={slug}/>
+      <CartSheet open={cartOpen} onOpenChange={setCartOpen} restaurant={restaurant} slug={slug} products={products}/>
 
-      {/* Easy Growth footer */}
-      <div style={{textAlign:"center",padding:"16px 0 24px",borderTop:"1px solid #1a1a1a",marginTop:8}}>
-        <a href="https://www.instagram.com/easygrowtth/" target="_blank" rel="noreferrer"
-          style={{display:"inline-flex",alignItems:"center",gap:6,textDecoration:"none",opacity:.5,transition:"opacity .2s"}}
-          onMouseEnter={e=>e.currentTarget.style.opacity="1"}
-          onMouseLeave={e=>e.currentTarget.style.opacity=".5"}>
-          <img src="/logoeg.png" alt="Easy Growth" style={{height:30,width:"auto"}}/>
-          <span style={{fontSize:14,fontWeight:600,fontFamily:"Manrope,sans-serif",color:"#ccc"}}>
-            Desenvolvido pela <span style={{color:"#31f199"}}>Easy Growth</span>
+      {brand.powered_by_enabled && (
+        <div style={{textAlign:"center",padding:"16px 0 24px",borderTop:"1px solid #1a1a1a",marginTop:8}}>
+          <span style={{fontSize:14,fontWeight:600,fontFamily:"Manrope,sans-serif",color:"#777"}}>
+            Cardapio digital por <span style={{color:accent}}>{brand.short_name || brand.name}</span>
           </span>
-        </a>
-      </div>
+        </div>
+      )}
     </div>
   );
 }
 
 export default function MenuPage() {
   const { slug } = useParams();
+  const { brand } = useBrand();
   const [data, setData] = useState(null);
   const [error, setError] = useState(false);
 
@@ -400,7 +485,7 @@ export default function MenuPage() {
         const restaurant = res.data.restaurant;
         cacheRestaurant(slug, restaurant);
         const title = `${restaurant.name} - Cardapio`;
-        const description = restaurant.tagline || restaurant.description || "Cardapio digital EG Delivery";
+        const description = restaurant.tagline || restaurant.description || `Cardapio digital ${brand.short_name || brand.name}`;
         document.title = title;
         [
           ["description", description],
@@ -419,7 +504,7 @@ export default function MenuPage() {
         }
       })
       .catch(() => setError(true));
-  }, [slug]);
+  }, [slug, brand.name, brand.short_name]);
 
   if (error) return (
     <div className="min-h-screen grid place-items-center text-center px-6" style={{background:"#0A0A0A"}}>
